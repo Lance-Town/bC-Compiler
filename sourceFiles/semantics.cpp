@@ -1,0 +1,483 @@
+/*
+ * @author Lance Townsend
+ *
+ * @brief functions to perform semantic analysis on the
+ * abstract syntax tree
+ * 
+ */
+
+#include <string.h>
+#include "treeNodes.h"
+#include "treeUtils.h"
+#include "symbolTable.h"
+#include "parser.tab.h"
+
+static int goffset = 0;
+static int foffset = 0;
+static int varCounter = 0;
+static int newScope = 0;
+
+void treeTraverse(TreeNode *current, SymbolTable *symtab);
+TreeNode *loadIOLib(TreeNode *syntree);
+bool insertError(TreeNode *current, SymbolTable *symtab);
+void treeStmtTraverse(TreeNode *current, SymbolTable *symtab);
+void treeExpTraverse(TreeNode *current, SymbolTable *symtab);
+void treeDeclTraverse(TreeNode *current, SymbolTable *symtab);
+void treeTraverse(TreeNode *current, SymbolTable *symtab);
+TreeNode *semanticAnalysis(TreeNode *syntree, SymbolTable *symtabX, int &globalOffset);
+
+
+/*
+ * @brief load IO libraries and link them to syntax tree
+ *
+ * @return head to tree after being linked
+ */
+TreeNode *loadIOLib(TreeNode *syntree) {
+   TreeNode *input, *output, *paramOutput;
+   TreeNode *inputb, *outputb, *paramOutputb;
+   TreeNode *inputc, *outputc, *paramOutputc;
+   TreeNode *outnl;
+
+   input = newDeclNode(FuncK, Integer);
+   input->lineno = -1;
+   input->attr.name = strdup("input");
+   input->type = Integer;
+
+   inputb = newDeclNode(FuncK, Boolean);
+   inputb->lineno = -1;
+   inputb->attr.name = strdup("inputb");
+   inputb->type = Boolean;
+
+   inputc = newDeclNode(FuncK, Boolean);
+   inputc->lineno = -1;
+   inputc->attr.name = strdup("inputc");
+   inputc->type = Char;
+
+   paramOutput = newDeclNode(ParamK, Void);
+   paramOutput->lineno = -1;
+   paramOutput->attr.name = strdup("*dummy*");
+   paramOutput->type = Integer;
+
+   output = newDeclNode(FuncK, Void);
+   output->lineno = -1;
+   output->attr.name = strdup("output");
+   output->type = Void;
+   output->child[0] = paramOutput;
+
+   paramOutputb = newDeclNode(ParamK, Void);
+   paramOutputb->lineno = -1;
+   paramOutputb->attr.name = strdup("*dummy*");
+   paramOutputb->type = Boolean;
+
+   outputb = newDeclNode(FuncK, Void);
+   outputb->lineno = -1;
+   outputb->attr.name = strdup("outputb");
+   outputb->type = Void;
+   outputb->child[0] = paramOutputb;
+
+   paramOutputc = newDeclNode(ParamK, Void);
+   paramOutputc->lineno = -1;
+   paramOutputc->attr.name = strdup("*dummy*");
+   paramOutputc->type = Char;
+
+   outputc = newDeclNode(FuncK, Void);
+   outputc->lineno = -1;
+   outputc->attr.name = strdup("outputc");
+   outputc->type = Void;
+   outputc->child[0] = paramOutputc;
+
+   outnl = newDeclNode(FuncK, Void, NULL);
+   outnl->lineno = -1;
+   outnl->attr.name = strdup("outnl");
+   outnl->type = Void;
+
+   // link them and prefix the tree we are interested in traversing
+   // this will put the symbols in the symbol table
+   input->sibling = output;
+   output->sibling = inputb;
+   inputb->sibling = outputb;
+   outputb->sibling = inputc;
+   inputc->sibling = outputc;
+   outputc->sibling = outnl;
+   outnl->sibling = syntree; // add in the tree we are given
+   
+   return input;
+}
+
+/*
+ * @brief Attempt to insert a node into the
+ * symbol table
+ * 
+ * @param current - Tree node to attempt to insert
+ * @param symtab - Symbol table to insert into
+ * 
+ * @return true if insert succeeds, false otherwise
+ */
+bool insertError(TreeNode *current, SymbolTable *symtab) {
+   if (!symtab->insert(current->attr.name, current)) {
+      //put an error msg for ASN6
+      return false;
+   }
+   return true;
+}
+
+/*
+ * @brief Perform semantic analysis on a Statement node
+ * 
+ * @param current - Tree node to be analyzed
+ * @param symtab - Symbol table for looking up children nodes
+ * 
+ * @return void
+ */
+void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
+   if (current->kind.stmt != CompoundK) {
+      newScope = 1;
+   }
+
+   int remOffset;
+
+   switch (current->kind.stmt) {
+      case IfK:
+         if (newScope) {   
+            symtab->enter((char *)"IfStmt");
+            remOffset = foffset;
+            treeTraverse(current->child[0], symtab);
+            //foffset -= 2;
+            current->size = foffset;
+            treeTraverse(current->child[1], symtab);
+            treeTraverse(current->child[2], symtab);
+            foffset = remOffset;
+            symtab->leave();
+         } else {
+            newScope = 1;
+            treeTraverse(current->child[0], symtab);
+            current->size = foffset;
+            treeTraverse(current->child[1], symtab);
+            treeTraverse(current->child[2], symtab);
+         }
+         break;
+
+      case WhileK:
+         if (newScope) {   
+            symtab->enter((char *)"WhileStmt");
+            remOffset = foffset;
+            treeTraverse(current->child[0], symtab);
+            //foffset -= 2;
+            current->size = foffset;
+            treeTraverse(current->child[1], symtab);
+            treeTraverse(current->child[2], symtab);
+            foffset = remOffset;
+            symtab->leave();
+         } else {
+            newScope = 1;
+            treeTraverse(current->child[0], symtab);
+            current->size = foffset;
+            treeTraverse(current->child[1], symtab);
+            treeTraverse(current->child[2], symtab);
+         }
+         break;
+
+      case ForK:
+         if (newScope) {   
+            symtab->enter((char *)"ForStmt");
+            remOffset = foffset;
+            treeTraverse(current->child[0], symtab);
+            foffset -= 2;
+            current->size = foffset;
+            treeTraverse(current->child[1], symtab);
+            treeTraverse(current->child[2], symtab);
+            foffset = remOffset;
+            symtab->leave();
+         } else {
+            newScope = 1;
+            treeTraverse(current->child[0], symtab);
+            current->size = foffset;
+            treeTraverse(current->child[1], symtab);
+            treeTraverse(current->child[2], symtab);
+         }
+         break;
+
+      case CompoundK:
+         if (newScope) {
+            symtab->enter((char*)"CompoundStatement");
+            remOffset = foffset;
+
+            treeTraverse(current->child[0], symtab);
+            current->size = foffset;
+            treeTraverse(current->child[1], symtab);
+            treeTraverse(current->child[2], symtab);
+
+            foffset = remOffset;
+            symtab->leave();
+         } else {
+            newScope = 1;
+
+            treeTraverse(current->child[0], symtab);
+            current->size = foffset;
+            treeTraverse(current->child[1], symtab);
+            treeTraverse(current->child[2], symtab);
+         }
+         break;
+
+      case ReturnK:
+         treeTraverse(current->child[0], symtab);
+         treeTraverse(current->child[1], symtab);
+         treeTraverse(current->child[2], symtab);
+
+         break;
+
+      case BreakK:
+         treeTraverse(current->child[0], symtab);
+         treeTraverse(current->child[1], symtab);
+         treeTraverse(current->child[2], symtab);
+
+         break;
+
+      case RangeK:
+         treeTraverse(current->child[0], symtab);
+         treeTraverse(current->child[1], symtab);
+         treeTraverse(current->child[2], symtab);
+
+         break;
+   }
+}
+
+/*
+ * @brief Perform semantic analysis on an Expression node
+ * 
+ * @param current - Tree node to be analyzed
+ * @param symtab - Symbol table for looking up children nodes
+ * 
+ * @return void
+ */
+void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
+   newScope = 1;
+
+   TreeNode *lookupNode;
+
+   switch(current->kind.exp) {
+      case AssignK:
+         
+         treeTraverse(current->child[0], symtab);
+
+         if (current->child[0] == NULL) {
+            //printf("ERROR: left child has no type - semantics.cpp::treeExpTraverse()\t%s\n", current->attr.name);
+         } else {
+            // loop up childs type and set it to current type
+            lookupNode = 
+               (TreeNode *) symtab->lookup(current->child[0]->attr.name);
+
+            if (lookupNode == NULL) {
+//               printf("ERROR: %s Child not in symbol table, but child %s exists\n", current->attr.name, current->child[0]->attr.name);
+
+               // child is not in the symbol table, but it does exist
+               // FIX for array not being in symbol table, but the child existing. 
+               current->type = current->child[0]->type;
+            } else {
+               current->type = lookupNode->type;
+            }
+         }
+
+         treeTraverse(current->child[1], symtab);
+         treeTraverse(current->child[2], symtab);
+
+         break;
+
+      case CallK:
+         treeTraverse(current->child[0], symtab);
+         lookupNode = (TreeNode *) symtab->lookup(current->attr.name);
+         if (lookupNode == NULL) {
+
+         } else {
+            current->type = lookupNode->type;
+            //current->size = lookupNode->size;
+            current->offset = lookupNode->offset;
+         }
+         treeTraverse(current->child[1], symtab);
+         treeTraverse(current->child[2], symtab);
+         break;
+
+      case ConstantK:
+         // all constants are global
+         if (current->type == Char && current->isArray) {
+            current->varKind = Global;
+            current->offset = goffset-1;
+            goffset -= current->size;
+         }
+         break;
+
+      case IdK:
+         treeTraverse(current->child[0], symtab);
+
+         lookupNode = (TreeNode *)symtab->lookup(current->attr.name);
+
+         if (lookupNode != NULL) {
+            current->offset = lookupNode->offset;
+            current->type = lookupNode->type;
+            current->size = lookupNode->size;
+            current->varKind = lookupNode->varKind;
+            current->isArray = lookupNode->isArray;
+            current->isStatic = lookupNode->isStatic;
+         } else {
+           
+         }
+
+         treeTraverse(current->child[1], symtab);
+         treeTraverse(current->child[2], symtab);
+
+         break;
+
+      case OpK:
+         int op = current->attr.op;
+         treeTraverse(current->child[0], symtab);
+
+         if (op == EQ || op == NEQ || op == LEQ || op == GEQ || op == '<' || op == '>') {
+            current->type = Boolean;
+         } else if (op == SIZEOF) {
+            current->type = Integer;
+         } else {
+            if (current->child[0] == NULL) {
+               printf("ERROR: Op child can not be NULL - semantics.cpp::treeExpTraverse\n");
+            } else {
+               lookupNode = (TreeNode *)symtab->lookup(current->child[0]->attr.name);
+               if (lookupNode == NULL) {
+                  current->type = current->child[0]->type;
+               } else {
+                  current->type = lookupNode->type;
+               }
+            }
+         }
+
+         if (op == '[') {
+            current->isArray = true;
+         }
+
+         treeTraverse(current->child[1], symtab);
+         treeTraverse(current->child[2], symtab);
+         break;
+   }
+
+   return;
+}
+
+/*
+ * @brief Perform semantic analysis on a Declaration node
+ * 
+ * @param current - Tree node to be analyzed
+ * @param symtab - Symbol table for looking up children nodes
+ * 
+ * @return void
+ */
+void treeDeclTraverse(TreeNode *current, SymbolTable *symtab) {
+   newScope = 1;
+
+   switch (current->kind.decl) {
+      case VarK:
+         treeTraverse(current->child[0], symtab);
+         // no break on purpose, follow through into ParamK
+      case ParamK:
+         if (insertError(current, symtab)) {
+            if (symtab->depth() == 1) {
+               current->varKind = Global;
+               current->offset = goffset;
+               goffset -= current->size;
+            } else if (current->isStatic) {
+               current->varKind = LocalStatic;
+               current->offset = goffset;
+               goffset -= current->size;
+
+               {
+                  char *newName;
+                  newName = new char[strlen(current->attr.name)+10];
+                  sprintf(newName, "%s-%d", current->attr.name, ++varCounter);
+                  symtab->insertGlobal(newName, current);
+                  delete [] newName;
+               }
+
+            } else {
+               current->varKind = Local;
+               current->offset = foffset;
+               foffset -= current->size;
+            }
+         }
+
+         if (current->kind.decl == ParamK) {
+            current->varKind = Parameter;
+         } else if (current->isArray) {
+            current->offset--;
+         }
+
+         treeTraverse(current->child[1], symtab);
+         treeTraverse(current->child[2], symtab);
+
+         break;
+      case FuncK:
+         newScope = 0;
+         foffset = -2;
+         
+         insertError(current, symtab);
+
+         symtab->enter(current->attr.name);
+         
+         treeTraverse(current->child[0], symtab);
+         current->size = foffset;
+         treeTraverse(current->child[1], symtab);
+         treeTraverse(current->child[2], symtab);
+
+         current->varKind = Global;
+
+         symtab->leave();
+
+         break;
+   }
+}
+
+/*
+ * @brief recursively analyze every node in the tree
+ * 
+ * @param current - Current node to be analyzed
+ * @param symtab - Symbol table for looking up children nodes
+ * 
+ * @return void
+ */
+void treeTraverse(TreeNode *current, SymbolTable *symtab) {
+   if (current == NULL) {
+      return;
+   }
+
+   switch(current->nodekind) {
+      case DeclK:
+         treeDeclTraverse(current, symtab);
+         break;
+      case ExpK:
+         treeExpTraverse(current, symtab);
+         break;
+      case StmtK:
+         treeStmtTraverse(current, symtab);
+         break;
+   }
+
+   if (current->sibling) {
+      treeTraverse(current->sibling, symtab);
+   }
+}
+
+/*
+ * @brief Perform semantic analysis on an AST
+ * 
+ * @param syntree - syntax tree to perform analysis on
+ * @param symtabX - symbol table to be filled in 
+ * @param globalOffset - will be set past the last global values
+ * 
+ * @return Annotated syntax tree
+ */
+TreeNode *semanticAnalysis(TreeNode *syntree, SymbolTable *symtabX, int &globalOffset) {
+
+   syntree = loadIOLib(syntree);
+
+   treeTraverse(syntree, symtabX);
+
+   globalOffset = goffset;
+   
+   return syntree;
+}

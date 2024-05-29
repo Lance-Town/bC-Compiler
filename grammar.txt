@@ -1,0 +1,213 @@
+program    : precomList declList                    {/* syntaxTree = $2;*/ }
+           ;
+
+precomList : precomList PRECOMPILER                   {/* NULL*/}
+             | PRECOMPILER                                 {/* NULL * /}
+             | /* empty */                                 { /* NULL */ }
+           ;
+
+declList   : declList decl                          {/* addSibling*/ }
+             | decl
+           ;
+
+decl       : varDecl
+             | funDecl
+           ;
+
+varDecl    : typeSpec varDeclList ';'               {/* setType.*/}
+           ;
+
+
+scopedVarDecl : STATIC typeSpec varDeclList ';'     {/* setType.*/}
+                | typeSpec varDeclList ';'             {/* setType.*/}
+              ;
+
+
+varDeclList  : varDeclList ',' varDeclInit          {/* addSibling */}
+               | varDeclInit
+             ;
+
+varDeclInit  : varDeclId
+               | varDeclId ':' simpleExp               {/* $$ = $1; if ($$ != NULL) $$->child[0] = $3; */}
+             ;
+
+<varDeclId   : ID                                         {/* newDeclNode */}
+             | ID '[' NUMCONST ']'                         {/* newDeclNode */}
+             ;
+
+typeSpec   : INT                                        {/* Integer*/}
+             | BOOL                                        {/* Boolean*/}
+             | CHAR                                        {/* Char */}
+           ;
+
+funDecl    : typeSpec ID '(' parms ')' stmt       {/* newDeclNode */}
+             | ID '(' parms ')' stmt                   {/* newDeclNode */}
+           ;
+
+parms      : parmList
+             | /* empty */                                { /* NULL */}
+           ;
+
+parmList   : parmList ';' parmTypeList              {/* addSibling */}
+             | parmTypeList
+           ;
+
+parmTypeList : typeSpec parmIdList                  {/* setType.*/}
+             ;
+
+parmIdList   : parmIdList ',' parmId                 {/* addSibling*/}
+             | parmId
+             ;
+
+parmId     : ID                                          {/* newDeclNode*/}
+             | ID '[' ']'                                   {/* newDeclNode*/}
+           ;
+
+stmt       : matched
+             | unmatched
+           ;
+
+
+matched    : IF simpleExp THEN matched ELSE matched   {/* newStmtNode*/}
+             | WHILE simpleExp DO matched                  {/* newStmtNode*/}
+             | FOR ID '=' iterRange DO matched             {/* newStmtNode(newDeclNode)*/}
+             | expStmt
+             | compoundStmt
+             | returnStmt
+             | breakStmt
+           ;
+
+iterRange  : simpleExp TO simpleExp                  {/* newStmtNode*/}
+             | simpleExp TO simpleExp BY simpleExp    {/* newStmtNode*/}
+           ;
+
+unmatched  : IF simpleExp THEN stmt                      { /* newStmtNode */ }
+             | IF simpleExp THEN matched ELSE unmatched  { /* newStmtNode*/ }
+             | WHILE simpleExp DO unmatched                {/* newStmtNode*/}
+             | FOR ID '=' iterRange DO unmatched           {/* newStmtNode(newDeclNode)*/}
+           ;
+
+expStmt    : exp ';'
+             | ';'                                        {/* NULL*/}
+           ;
+
+compoundStmt : '{' localDecls stmtList '}'         {/* newStmtNode*/}
+             ;
+
+localDecls : localDecls scopedVarDecl              {/* addSibling*/}
+             | /* empty */                               { /* NULL*/}
+             ;
+
+stmtList   : stmtList stmt                         {/* addSibling*/}
+             | /* empty */                               { /* NULL*/}
+           ;
+
+returnStmt : RETURN ';'                                {/* newStmtNode*/}
+             | RETURN exp ';'                           {/* newStmtNode*/}
+           ;
+
+breakStmt  : BREAK ';'                                 {/* newStmtNode*/}
+           ;
+
+exp        : mutable assignop exp                {/* newExpNode*/}
+             | mutable INC                              {/* newExpNode*/}
+             | mutable DEC                              {/* newExpNode*/}
+             | simpleExp
+           ;
+
+assignop  : '='
+            | ADDASS
+            | SUBASS
+            | MULASS
+            | DIVASS
+          ;
+
+simpleExp  : simpleExp OR andExp                 {/* newExpNode*/}
+             | andExp
+           ;
+
+andExp     : andExp AND unaryRelExp              {/* newExpNode*/}
+             | unaryRelExp
+           ;
+
+unaryRelExp : NOT unaryRelExp                      {/* newExpNode*/}
+              | relExp
+            ;
+
+relExp     : minmaxExp relop minmaxExp          {/* newExpNode*/}
+             | minmaxExp
+           ;
+
+relop      : LEQ
+             | '<'
+             | '>'
+             | GEQ
+             | EQ
+             | NEQ
+           ;
+
+minmaxExp  : minmaxExp minmaxop sumExp              {/* newExpNode*/}
+             | sumExp
+           ;
+
+minmaxop   : MAX
+             | MIN
+           ;
+
+sumExp     : sumExp sumop mulExp              {/* newExpNode*/}
+             | mulExp
+           ;
+
+sumop      : '+'
+             | '-'
+           ;
+
+mulExp     : mulExp mulop unaryExp           {/* newExpNode*/}
+             | unaryExp
+           ;
+
+mulop      : '*'
+             | '/'
+             | '%'
+           ;
+
+unaryExp   : unaryop unaryExp                   {/* newExpNode*/}
+             | factor
+           ;
+
+unaryop    : '-'                                     {/* newExpNode*/}
+             | '*'                                      {/* newExpNode*/}
+             | '?'                                      {/* newExpNode*/}
+             ;
+           ;
+
+factor     : immutable
+             | mutable
+           ;
+
+mutable    : ID                                       {/* newExpNode*/}
+             | ID '[' exp ']'                          {/* newExpNode*/}
+           ;
+
+immutable  : '(' exp ')'                           
+             | call
+             | constant
+           ;
+
+call       : ID '(' args ')'                        {/*newExpNode*/}
+           ;
+
+args       : argList
+             | /* empty */                                { /* NULL;*/}
+           ;
+
+argList    : argList ',' exp                       {/* addSibling*/}
+             | exp
+           ;
+
+constant   : NUMCONST                                   {/* newExpNode*/}
+             | CHARCONST                                   {/* newExpNode*/}
+             | STRINGCONST                                 {/* newExpNode*/}
+             | BOOLCONST                                   {/* newExpNode*/}
+           ;
+
