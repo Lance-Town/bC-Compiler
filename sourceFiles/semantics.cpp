@@ -142,7 +142,6 @@ void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
             symtab->enter((char *)"IfStmt");
             remOffset = foffset;
             treeTraverse(current->child[0], symtab);
-            //foffset -= 2;
             current->size = foffset;
             treeTraverse(current->child[1], symtab);
             treeTraverse(current->child[2], symtab);
@@ -162,7 +161,6 @@ void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
             symtab->enter((char *)"WhileStmt");
             remOffset = foffset;
             treeTraverse(current->child[0], symtab);
-            //foffset -= 2;
             current->size = foffset;
             treeTraverse(current->child[1], symtab);
             treeTraverse(current->child[2], symtab);
@@ -298,7 +296,7 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
          break;
 
       case ConstantK:
-         // all constants are global
+         // All constant strings are global
          if (current->type == Char && current->isArray) {
             current->varKind = Global;
             current->offset = goffset-1;
