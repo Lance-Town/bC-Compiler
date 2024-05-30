@@ -331,8 +331,57 @@ void codegenDecl(TreeNode *current) {
 
    switch (current->kind.decl) {
       case VarK:
-         // lots to do here
-         break;
+         {
+            if (current->isArray) {
+               switch(current->varKind) {
+                  case Local:
+                     {
+                        emitRM((char *)"LDC", AC, current->size-1, 6, 
+                              (char *)"load size of array", current->attr.name);
+                        emitRM((char *)"ST", AC, current->offset+1, 
+                              offsetRegister(current->varKind), (char *)"save size of array", 
+                              current->attr.name);
+                        break;
+                     }
+
+                  case LocalStatic:
+                  case Parameter:
+                  case Global:
+                     // do nothing
+                     break;
+                  case None:
+                     // ERROR
+                     break;
+               }
+
+               // ARRAY VALUE initializatin
+               if (current->child[0]) {
+                  codegenExpression(current->child[0]);
+                  emitRM((char *)"LDA", AC1, current->offset, offsetRegister(current->varKind), 
+                        (char *)"address of lhs");
+                  emitRM((char *)"LD", AC2, 1, AC, (char *)"size of rhs");
+                  emitRM((char *)"LD", AC3, 1, AC1, (char *)"size of lhs");
+                  emitRO((char *)"SWP", AC2, AC3, 6, (char *)"pick smallest size");
+                  emitRO((char *)"MOV", AC1, AC, AC2, (char *)"array op =");
+               }
+
+            } else { /* !current->isArray */
+               // SCALAR VALUE initialization
+               if (current->child[0]) {
+                  if (current->varKind == Local) {
+                     // compute rhs -> AC
+                     codegenExpression(current->child[0]);
+
+                     // save it
+                     emitRM((char *)"ST", AC, current->offset, FP, (char *)"Store variable", current->attr.name);
+                  } else if (current->varKind == None) {
+                     // ERROR CONDITION
+                  }
+               }
+            }
+
+            break;
+         }
 
       case FuncK:
          if (current->lineno == -1) {
@@ -376,25 +425,25 @@ void codegenGeneral(TreeNode *current) {
 }
 
 void initAGlobalSymbol(std::string stm, void *ptr) {
-   TreeNode *currnode;
+   TreeNode *current;
    
    // printf("Symbol: %s\n", sym.c_str()); // dump the symbol table
-   currnode = (TreeNode *)ptr;
+   current = (TreeNode *)ptr;
 
-   // printf("lineno: %d\n", currnode->lineno); // dump the symbol table
+   // printf("lineno: %d\n", current->lineno); // dump the symbol table
 
-   if (currnode->lineno != -1) {
-      if (currnode->isArray) {
-         emitRM((char *)"LDC", AC, currnode->size-1, 6, (char *)"load size of array", currnode->attr.name);
-         emitRM((char *)"ST", AC, currnode->offset+1, GP, (char *)"save size of array", currnode->attr.name);
+   if (current->lineno != -1) {
+      if (current->isArray) {
+         emitRM((char *)"LDC", AC, current->size-1, 6, (char *)"load size of array", current->attr.name);
+         emitRM((char *)"ST", AC, current->offset+1, GP, (char *)"save size of array", current->attr.name);
       }
-      if (currnode->kind.decl==VarK && (currnode->varKind == Global || currnode->varKind == LocalStatic)) {
-         if (currnode->child[0]) {
+      if (current->kind.decl==VarK && (current->varKind == Global || current->varKind == LocalStatic)) {
+         if (current->child[0]) {
             // compute rhs -> AC;
-            codegenExpression(currnode->child[0]);
+            codegenExpression(current->child[0]);
 
             // save it
-            emitRM((char *)"ST", AC, currnode->offset, GP, (char *)"Store variable", currnode->attr.name);
+            emitRM((char *)"ST", AC, current->offset, GP, (char *)"Store variable", current->attr.name);
          }
       }
    }
