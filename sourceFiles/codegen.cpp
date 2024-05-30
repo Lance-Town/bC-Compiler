@@ -26,6 +26,9 @@ extern void initTokenStrings();
 
 // Prototypes
 void codegenGeneral(TreeNode *current);
+void codegenExpression(TreeNode *current);
+void codegenDecl(TreeNode *current);
+void codegenStatement(TreeNode *current);
 
 int toffset;                    // next available termporary space
 FILE *code;                     // shared global code
@@ -100,6 +103,24 @@ void codegenLibraryFun(TreeNode *current) {
    return;
 }
 
+/*
+ * @brief get offset register for different variable kinds
+ */
+int offsetRegister(VarKind v) {
+   switch (v) {
+      case Local:
+         return FP;
+      case Parameter:
+         return FP;
+      case Global:
+         return GP;
+      case LocalStatic:
+         return GP;
+      default:
+         printf("ERROR(codegen): looking up offset register for a variable of type %d\n", v);
+         return 666;
+   }
+}
 
 /*
  * @brief Generate code for functions
@@ -145,6 +166,37 @@ void codegenStatement(TreeNode *current) {
          break;
 
       case WhileK:
+         int currloc, skiploc;
+
+         emitComment((char *)"WHILE");
+
+         // return here to do the test 
+         currloc = emitSkip(0);
+         
+         // test expression
+         codegenExpression(current->child[0]); 
+
+         emitRM((char *)"JNZ", AC, 1, PC, (char *)"Jump to while part");
+         emitComment((char *)"DO");
+
+         // save old break statement return point
+         skiploc = breakloc;
+
+         // address of instruction that jumps to end of loop, 
+         // also the backpatch point
+         breakloc = emitSkip(1);
+
+         // do body of loop
+         codegenGeneral(current->child[1]);
+
+         emitGotoAbs(currloc, (char *)"go to beginning of loop");
+
+         // backpatch jump to end of loop
+         backPatchAJumpToHere(breakloc, (char *)"Jump past loop [backpatch]");
+
+         // restore break statement
+         breakloc = skiploc;
+         emitComment((char *)"END WHILE");
 
          break;
 
@@ -197,10 +249,43 @@ void codegenExpression(TreeNode *current) {
 
    switch (current->kind.exp) {
       case AssignK:
-
-         break;
+         {
+            TreeNode *lhs = current->child[0];
+            if (lhs->attr.op == '[') {
+               // TODO
+            } else {
+               int offReg;
+               offReg = offsetRegister(lhs->varKind);
+   
+               switch (offReg) {
+                  case ADDASS:
+                     emitRM((char *)"LD", AC1, lhs->offset, offReg, (char *)"load lhs variable", lhs->attr.name);
+                     emitRO((char *)"ADD", AC, AC1, AC, (char *)"op +=");
+                     emitRM((char *)"ST", AC, lhs->offset, offReg, (char *)"Store variable", lhs->attr.name);
+                     break;
+                  case SUBASS:
+                     // TODO
+                     break;
+                  
+                  case DIVASS:
+                     // TODO
+                     break;
+   
+                  case MULASS:
+                     // TODO   
+                     break;
+   
+                  default:
+                     // ERROR
+                     break;
+               }
+               
+            }
+            break;
+         }
 
       case CallK:
+
          break;
 
       case ConstantK:
