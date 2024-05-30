@@ -375,6 +375,78 @@ void codegenGeneral(TreeNode *current) {
    return;
 }
 
+void initAGlobalSymbol(std::string stm, void *ptr) {
+   TreeNode *currnode;
+   
+   // printf("Symbol: %s\n", sym.c_str()); // dump the symbol table
+   currnode = (TreeNode *)ptr;
+
+   // printf("lineno: %d\n", currnode->lineno); // dump the symbol table
+
+   if (currnode->lineno != -1) {
+      if (currnode->isArray) {
+         emitRM((char *)"LDC", AC, currnode->size-1, 6, (char *)"load size of array", currnode->attr.name);
+         emitRM((char *)"ST", AC, currnode->offset+1, GP, (char *)"save size of array", currnode->attr.name);
+      }
+      if (currnode->kind.decl==VarK && (currnode->varKind == Global || currnode->varKind == LocalStatic)) {
+         if (currnode->child[0]) {
+            // compute rhs -> AC;
+            codegenExpression(currnode->child[0]);
+
+            // save it
+            emitRM((char *)"ST", AC, currnode->offset, GP, (char *)"Store variable", currnode->attr.name);
+         }
+      }
+   }
+
+   return;
+}
+
+/*
+ * @brief initialize global array sizes
+ */
+void initGlobalArraySizes() {
+   emitComment((char *)"INIT GLOBALS AND STATICS");
+   globals->applyToAllGlobal(initAGlobalSymbol);
+   emitComment((char *)"END INIT GLOBALS AND STATICS");
+
+   return;
+}
+
+/*
+ * @brief Generate init code
+ */
+void codegenInit(int initJump, int globalOffset) {
+   backPatchAJumpToHere(initJump, (char *)"Jump to init [backpatch]");
+
+   emitComment((char *)"INIT");
+   //OLD pre 4.6 TM emitRM((char *)"LD", GP, 0, 0, (char *)"Set the global pointer");
+   emitRM((char *)"LDA", FP, globalOffset, GP, (char *)"set first frame at end of globals");
+   emitRM((char *)"ST", FP, 0, FP, (char *)"store old fp (point to self)");
+
+   initGlobalArraySizes();
+
+   emitRM((char *)"LDA", AC, 1, PC, (char *)"Return address in ac");
+
+   {
+      // Jump to main
+      TreeNode *funcNode;
+
+      funcNode = (TreeNode *)globals->lookup((char *)"main");
+      if (funcNode) {
+         emitGotoAbs(funcNode->offset, (char *)"Jump to main");
+      } else {
+         printf("ERROR(LINKER): Procedure main is not defined.\n");
+         numErrors++;
+      }
+   }
+
+   emitRO((char *)"HALT", 0, 0, 0, (char *)"DONE!");
+   emitComment((char *)"END INIT");
+
+   return;
+}
+
 /*
  * @brief top level code generator call
  *
@@ -406,5 +478,5 @@ void codegen(FILE *codeIn, char *srcFile,
    codegenGeneral(syntaxTree);
    
    // generation of initialization for run
-   //codegeninit(initJump, globalOffset);
+   codegenInit(initJump, globalOffset);
 }
