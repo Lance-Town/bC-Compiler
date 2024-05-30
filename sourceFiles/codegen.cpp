@@ -1,3 +1,10 @@
+/*
+ * @author Lance Townsend
+ *
+ * @brief functions for code generation targeted
+ * at the Tiny Virtual Machine
+ */
+
 #include <stdio.h>
 #include "emitcode.h"
 #include "treeUtils.h"
@@ -17,6 +24,8 @@ extern void initTokenStrings();
 #define OFPOFF 0
 #define RETURNOFFSET -1
 
+// Prototypes
+void codegenGeneral(TreeNode *current);
 
 int toffset;                    // next available termporary space
 FILE *code;                     // shared global code
@@ -91,8 +100,119 @@ void codegenLibraryFun(TreeNode *current) {
    return;
 }
 
+
 /*
- *@brief Generate code for declarations
+ * @brief Generate code for functions
+ */
+void codegenFun(TreeNode *current) {
+   emitComment((char *)"");
+   emitComment((char *)"** ** ** ** ** ** ** ** ** ** ** **");
+   emitComment((char *)"FUNCTION", current->attr.name);
+   toffset = current->size;
+   emitComment((char *)"TOFF set:", toffset);
+
+   // IMPORTANT: For function nodes, the offset is defined to be the
+   // position of the function in the code space. This is accesible
+   // via the symbol table.
+   current->offset = emitSkip(0); // offset holds the instruction address
+
+   // store return address
+   emitRM((char *)"ST", AC, RETURNOFFSET, FP, (char *)"Store return address");
+
+   // generate code for the statements
+   codegenGeneral(current->child[1]);
+
+   // in case there was no return statement, set return register to 0 and return
+   emitComment((char *)"Add standard closing in case there is no return statement");
+   emitRM((char *)"LDC", RT, 0, 6, (char *)"Set return value to 0");
+   emitRM((char *)"LD", AC, RETURNOFFSET, FP, (char *)"Load return address");
+   emitRM((char *)"LD", FP, OFPOFF, FP, (char *)"Adjust fp");
+   emitGoto(0, AC, (char *)"Return");
+   emitComment((char *)"END FUNCTION", current->attr.name);
+
+   return;
+}
+
+/*
+ * @brief Generate code for statements 
+ */
+void codegenStatement(TreeNode *current) {
+   commentLineNum(current);
+
+   switch (current->kind.stmt) {
+      case IfK:
+
+         break;
+
+      case WhileK:
+
+         break;
+
+      case ForK:
+
+         break;
+
+      case CompoundK:
+
+         break;
+
+      case ReturnK:
+
+         break;
+
+      case BreakK:
+
+         break;
+
+      case RangeK:
+
+         break;
+
+   }    
+
+   return;
+}
+
+/*
+ * @brief Generate code for expressions
+ */
+void codegenExpression(TreeNode *current) {
+   commentLineNum(current);
+
+   switch (current->kind.exp) {
+      case AssignK:
+
+         break;
+
+      case CallK:
+         break;
+
+      case ConstantK:
+         if (current->type = Char) {
+            if (current->isArray) {
+               emitStrLit(current->offset, current->attr.string);
+               emitRM((char *)"LDA", AC, current->offset, 0, (char *)"Load address of char array");
+            } else {
+               emitRM((char *)"LDC", AC, int(current->attr.cvalue), 6, (char *)"Load char constant");
+            }
+         }
+
+         break;
+
+      case IdK:
+
+         break;
+
+      case OpK:
+
+         break;
+   }    
+
+   return;
+}
+
+/*
+ * @brief Generate code for declarations
  */
 void codegenDecl(TreeNode *current) {
    commentLineNum(current);
@@ -106,7 +226,7 @@ void codegenDecl(TreeNode *current) {
          if (current->lineno == -1) {
             codegenLibraryFun(current);
          } else {
-            //codegenFun(current);
+            codegenFun(current);
          }
          break;
 
@@ -127,10 +247,11 @@ void codegenGeneral(TreeNode *current) {
    while (tmp) {
       switch (tmp->nodekind) {
          case StmtK:
-            //codegenStatement(tmp);
+            codegenStatement(tmp);
             break;
          case ExpK:
             emitComment((char *)"EXPRESSION");
+            codegenExpression(tmp);
             break;
          case DeclK:
             codegenDecl(tmp);
