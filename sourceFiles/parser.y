@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include "treeNodes.h"
 #include "treeUtils.h"
+#include "codegen.h"
 #include "scanType.h"
 #include "symbolTable.h"
 #include "semantics.h"
@@ -349,8 +350,9 @@ int main(int argc, char **argv) {
    }
 
    if (numErrors == 0) {
-      printTree(stdout, syntaxTree, true, true);
+      codegen(stdout, argv[1], syntaxTree, symtab, globalOffset, false);
    }
+
    printf("Number of warnings: %d\n", numWarnings);
    printf("Number of errors: %d\n", numErrors);
 
