@@ -153,6 +153,19 @@ void codegenStatement(TreeNode *current) {
          break;
 
       case CompoundK:
+         int savedToffset;
+
+         savedToffset = toffset;
+         toffset = current->size;
+         emitComment((char *)"COMPOUND");
+         emitComment((char *)"TOFF set:", toffset);
+         codegenGeneral(current->child[0]); // process inits
+         emitComment((char *)"Compound Body");
+         codegenGeneral(current->child[1]); 
+         toffset = savedToffset;
+         emitComment((char *)"TOFF set:", toffset);
+         emitComment((char *)"END COMPOUND");
+
 
          break;
 
@@ -166,6 +179,9 @@ void codegenStatement(TreeNode *current) {
 
       case RangeK:
 
+         break;
+
+      default:
          break;
 
    }    
