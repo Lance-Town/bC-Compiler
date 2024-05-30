@@ -305,6 +305,17 @@ void codegenExpression(TreeNode *current) {
          break;
 
       case OpK:
+         if (current->child[1]) {
+            emitRM((char *)"ST", AC, toffset, FP, (char *)"Push left side");
+            toffset--; 
+            emitComment((char *)"TOFF dec:", toffset);
+            codegenExpression(current->child[1]);
+            toffset++;
+            emitComment((char *)"TOFF inc:", toffset);
+            emitRM((char *)"LD", AC1, toffset, FP, (char *)"Pop left into ac1");
+         }
+
+         // TODO: more code to come
 
          break;
    }    
