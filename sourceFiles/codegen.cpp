@@ -254,6 +254,34 @@ void codegenExpression(TreeNode *current) {
 
             if (lhs->attr.op == '[') {
                // TODO
+               lhs->isArray = true;
+               TreeNode *var = lhs->child[0], *index = lhs->child[1];
+
+               if (var == NULL) {
+                  printf("ERROR(codegenExpression) var is NULL\n");
+                  break;
+               }
+               if (index == NULL) {
+                  printf("ERROR(codegenExpression) var is NULL\n");
+                  break;
+               }
+
+               codegenExpression(index);
+               var->varKind = Global;
+               
+               codegenExpression(var);
+               emitRO((char *)"SUB", AC2, 5, 3, (char *)"Compute offset of value");
+               
+               emitRM((char *)"LD", AC, 0, 5, (char *)"load lhs variable", var->attr.name);
+
+               if (current->attr.op == INC) {
+                  emitRM((char *)"LDA", AC, 1, 3, (char *)"increment value of", var->attr.name);
+               } else if (current->attr.op == DEC) {
+                  emitRM((char *)"LDA", AC, -1, 3, (char *)"decrement value of", var->attr.name);
+               }
+               
+               emitRM((char *)"ST", AC, lhs->offset, 5, (char *)"Store variable", var->attr.name);
+
             } else {
                int offReg;
                offReg = offsetRegister(lhs->varKind);
@@ -333,7 +361,7 @@ void codegenExpression(TreeNode *current) {
 
       case IdK:
          if (current->isArray) {
-            emitRM((char *)"LDA", AC, 3, current->offset, (char *)"Load array", current->attr.name);
+            emitRM((char *)"LDA", AC2, current->offset, 0, (char *)"Load address of base of array", current->attr.name);
          } else {
             emitRM((char *)"LD", AC, -2, 1, (char *)"Load variable", current->attr.name);
          }
