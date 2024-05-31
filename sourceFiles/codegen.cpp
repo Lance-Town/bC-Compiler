@@ -250,12 +250,17 @@ void codegenExpression(TreeNode *current) {
    switch (current->kind.exp) {
       case AssignK:
          {
-            TreeNode *lhs = current->child[0];
+            TreeNode *lhs = current->child[0], *rhs = current->child[1];
+
             if (lhs->attr.op == '[') {
                // TODO
             } else {
                int offReg;
                offReg = offsetRegister(lhs->varKind);
+
+               if (rhs) {
+                  codegenExpression(rhs);
+               }
    
                switch (current->attr.op) {
                   case ADDASS:
@@ -282,7 +287,18 @@ void codegenExpression(TreeNode *current) {
                      break;
 
                   case '=':
-                     codegenExpression(current->child[1]);
+                     emitRM((char *)"ST", AC, lhs->offset, offReg, (char *)"Store variable", lhs->attr.name);
+                     break;
+
+                  case DEC:
+                     emitRM((char *)"LD", AC, lhs->offset, offReg, (char *)"load lhs variable", lhs->attr.name);
+                     emitRM((char *)"LDA", AC, -1, 3, (char *)"decrement value of", lhs->attr.name);
+                     emitRM((char *)"ST", AC, lhs->offset, offReg, (char *)"Store variable", lhs->attr.name);
+                     break;
+
+                  case INC:
+                     emitRM((char *)"LD", AC, lhs->offset, offReg, (char *)"load lhs variable", lhs->attr.name);
+                     emitRM((char *)"LDA", AC, 1, 3, (char *)"increment value of", lhs->attr.name);
                      emitRM((char *)"ST", AC, lhs->offset, offReg, (char *)"Store variable", lhs->attr.name);
                      break;
 
