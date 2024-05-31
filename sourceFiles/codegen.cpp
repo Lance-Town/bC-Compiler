@@ -257,24 +257,35 @@ void codegenExpression(TreeNode *current) {
                int offReg;
                offReg = offsetRegister(lhs->varKind);
    
-               switch (offReg) {
+               switch (current->attr.op) {
                   case ADDASS:
                      emitRM((char *)"LD", AC1, lhs->offset, offReg, (char *)"load lhs variable", lhs->attr.name);
                      emitRO((char *)"ADD", AC, AC1, AC, (char *)"op +=");
                      emitRM((char *)"ST", AC, lhs->offset, offReg, (char *)"Store variable", lhs->attr.name);
                      break;
                   case SUBASS:
-                     // TODO
+                     emitRM((char *)"LD", AC1, lhs->offset, offReg, (char *)"load lhs variable", lhs->attr.name);
+                     emitRO((char *)"SUB", AC, AC1, AC, (char *)"op -=");
+                     emitRM((char *)"ST", AC, lhs->offset, offReg, (char *)"Store variable", lhs->attr.name);
                      break;
                   
                   case DIVASS:
-                     // TODO
+                     emitRM((char *)"LD", AC1, lhs->offset, offReg, (char *)"load lhs variable", lhs->attr.name);
+                     emitRO((char *)"DIV", AC, AC1, AC, (char *)"op /=");
+                     emitRM((char *)"ST", AC, lhs->offset, offReg, (char *)"Store variable", lhs->attr.name);
                      break;
    
                   case MULASS:
-                     // TODO   
+                     emitRM((char *)"LD", AC1, lhs->offset, offReg, (char *)"load lhs variable", lhs->attr.name);
+                     emitRO((char *)"MUL", AC, AC1, AC, (char *)"op *=");
+                     emitRM((char *)"ST", AC, lhs->offset, offReg, (char *)"Store variable", lhs->attr.name);
                      break;
-   
+
+                  case '=':
+                     codegenExpression(current->child[1]);
+                     emitRM((char *)"ST", AC, lhs->offset, offReg, (char *)"Store variable", lhs->attr.name);
+                     break;
+
                   default:
                      // ERROR
                      break;
@@ -289,22 +300,34 @@ void codegenExpression(TreeNode *current) {
          break;
 
       case ConstantK:
-         if (current->type = Char) {
+         if (current->type == Char) {
             if (current->isArray) {
                emitStrLit(current->offset, current->attr.string);
                emitRM((char *)"LDA", AC, current->offset, 0, (char *)"Load address of char array");
             } else {
                emitRM((char *)"LDC", AC, int(current->attr.cvalue), 6, (char *)"Load char constant");
             }
+         } else if (current->type == Boolean) {
+            emitRM((char *)"LDC", AC, current->attr.value, 6, (char *)"Load Boolean constant");
+         } else if (current->type == Integer) {
+            emitRM((char *)"LDC", AC, current->attr.value, 6, (char *)"Load integer constant");
          }
 
          break;
 
       case IdK:
-
+         if (current->isArray) {
+            emitRM((char *)"LDA", AC, 3, current->offset, (char *)"Load array", current->attr.name);
+         } else {
+            emitRM((char *)"LD", AC, -2, 1, (char *)"Load variable", current->attr.name);
+         }
          break;
 
       case OpK:
+         if (current->child[0]) {
+            codegenExpression(current->child[0]);
+         }
+
          if (current->child[1]) {
             emitRM((char *)"ST", AC, toffset, FP, (char *)"Push left side");
             toffset--; 
@@ -313,6 +336,13 @@ void codegenExpression(TreeNode *current) {
             toffset++;
             emitComment((char *)"TOFF inc:", toffset);
             emitRM((char *)"LD", AC1, toffset, FP, (char *)"Pop left into ac1");
+
+            switch(current->attr.op) {
+               case '+':
+                  emitRO((char *)"ADD", 3, 4, 3, (char*)"Op +");
+                  break;
+               
+            }
          }
 
          // TODO: more code to come
