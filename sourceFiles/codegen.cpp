@@ -251,11 +251,13 @@ void codegenExpression(TreeNode *current) {
       case AssignK:
          {
             TreeNode *lhs = current->child[0], *rhs = current->child[1];
+            int offReg;
 
             if (lhs->attr.op == '[') {
                // TODO
                lhs->isArray = true;
                TreeNode *var = lhs->child[0], *index = lhs->child[1];
+               offReg = offsetRegister(var->varKind);
 
                if (var == NULL) {
                   printf("ERROR(codegenExpression) var is NULL\n");
@@ -267,23 +269,57 @@ void codegenExpression(TreeNode *current) {
                }
 
                codegenExpression(index);
-               var->varKind = Global;
-               
-               codegenExpression(var);
-               emitRO((char *)"SUB", AC2, 5, 3, (char *)"Compute offset of value");
-               
-               emitRM((char *)"LD", AC, 0, 5, (char *)"load lhs variable", var->attr.name);
 
-               if (current->attr.op == INC) {
-                  emitRM((char *)"LDA", AC, 1, 3, (char *)"increment value of", var->attr.name);
-               } else if (current->attr.op == DEC) {
-                  emitRM((char *)"LDA", AC, -1, 3, (char *)"decrement value of", var->attr.name);
+               if (rhs != NULL) {
+                  emitRM((char *)"ST", AC, toffset, FP, (char *)"Push index");
+                  toffset--;
+                  emitComment((char *)"TOFF dec:", toffset);
+                  codegenExpression(rhs);
+                  toffset++;
+                  emitComment((char *)"TOFF inc:", toffset);
+                  emitRM((char *)"LD", AC1, toffset, FP, (char *)"Pop index");
                }
                
-               emitRM((char *)"ST", AC, lhs->offset, 5, (char *)"Store variable", var->attr.name);
+               if (var->varKind == Parameter) {
+                  emitRM((char *)"LD", AC2, var->offset, FP, (char *)"Load address of base of array", var->attr.name);
+               } else if (var->varKind == Global || var->varKind == LocalStatic) {
+                  emitRM((char *)"LDA", AC2, var->offset, GP, (char *)"Load address of base of array", var->attr.name);
+               } else {
+                  emitRM((char *)"LDA", AC2, var->offset, FP, (char *)"Load address of base of array", var->attr.name);
+               }
+               
+               int op = current->attr.op;
+
+               if (op == INC || op == DEC) {
+                  emitRO((char *)"SUB", AC2, AC2, AC, (char *)"Compute offset of value");
+               } else {
+                  emitRO((char *)"SUB", AC2, AC2, AC1, (char *)"Compute offset of value");
+               }
+               
+               switch(op) {
+                  case INC:
+                     emitRM((char *)"LD", AC, 0, 5, (char *)"load lhs variable", var->attr.name);
+//                     emitRM((char *)"LD", AC1, var->offset, offReg, (char *)"load lhs variable", var->attr.name);
+                     emitRM((char *)"LDA", AC, 1, AC, (char *)"increment value of", var->attr.name);
+                     emitRM((char *)"ST", AC, 0, AC2, (char *)"Store variable", var->attr.name);
+                     break;
+
+                  case DEC:
+                     emitRM((char *)"LD", AC, 0, 5, (char *)"load lhs variable", var->attr.name);
+//                     emitRM((char *)"LD", AC1, var->offset, offReg, (char *)"load lhs variable", var->attr.name);
+                     emitRM((char *)"LDA", AC, -1, AC, (char *)"decrement value of", var->attr.name);
+                     emitRM((char *)"ST", AC, 0, AC2, (char *)"Store variable", var->attr.name);
+                     break;
+
+                  case ADDASS:
+                     emitRM((char *)"LD", AC1, 0, 5, (char *)"load lhs variable", var->attr.name);
+                     emitRO((char *)"ADD", AC, AC1, AC, (char *)"op +=");
+                     emitRM((char *)"ST", AC, 0, 5, (char *)"Store variable", var->attr.name);
+                     break;
+               }
+               
 
             } else {
-               int offReg;
                offReg = offsetRegister(lhs->varKind);
 
                if (rhs) {
@@ -320,13 +356,13 @@ void codegenExpression(TreeNode *current) {
 
                   case DEC:
                      emitRM((char *)"LD", AC, lhs->offset, offReg, (char *)"load lhs variable", lhs->attr.name);
-                     emitRM((char *)"LDA", AC, -1, 3, (char *)"decrement value of", lhs->attr.name);
+                     emitRM((char *)"LDA", AC, -1, AC, (char *)"decrement value of", lhs->attr.name);
                      emitRM((char *)"ST", AC, lhs->offset, offReg, (char *)"Store variable", lhs->attr.name);
                      break;
 
                   case INC:
                      emitRM((char *)"LD", AC, lhs->offset, offReg, (char *)"load lhs variable", lhs->attr.name);
-                     emitRM((char *)"LDA", AC, 1, 3, (char *)"increment value of", lhs->attr.name);
+                     emitRM((char *)"LDA", AC, 1, AC, (char *)"increment value of", lhs->attr.name);
                      emitRM((char *)"ST", AC, lhs->offset, offReg, (char *)"Store variable", lhs->attr.name);
                      break;
 
@@ -347,23 +383,23 @@ void codegenExpression(TreeNode *current) {
          if (current->type == Char) {
             if (current->isArray) {
                emitStrLit(current->offset, current->attr.string);
-               emitRM((char *)"LDA", AC, current->offset, 0, (char *)"Load address of char array");
+               emitRM((char *)"LDA", AC, current->offset, GP, (char *)"Load address of char array");
             } else {
-               emitRM((char *)"LDC", AC, int(current->attr.cvalue), 6, (char *)"Load char constant");
+               emitRM((char *)"LDC", AC, int(current->attr.cvalue), AC3, (char *)"Load char constant");
             }
          } else if (current->type == Boolean) {
-            emitRM((char *)"LDC", AC, current->attr.value, 6, (char *)"Load Boolean constant");
+            emitRM((char *)"LDC", AC, current->attr.value, AC3, (char *)"Load Boolean constant");
          } else if (current->type == Integer) {
-            emitRM((char *)"LDC", AC, current->attr.value, 6, (char *)"Load integer constant");
+            emitRM((char *)"LDC", AC, current->attr.value, AC3, (char *)"Load integer constant");
          }
 
          break;
 
       case IdK:
          if (current->isArray) {
-            emitRM((char *)"LDA", AC2, current->offset, 0, (char *)"Load address of base of array", current->attr.name);
+            emitRM((char *)"LDA", AC2, current->offset, FP, (char *)"Load address of base of array", current->attr.name);
          } else {
-            emitRM((char *)"LD", AC, -2, 1, (char *)"Load variable", current->attr.name);
+            emitRM((char *)"LD", AC, -2, FP, (char *)"Load variable", current->attr.name);
          }
          break;
 
@@ -383,7 +419,7 @@ void codegenExpression(TreeNode *current) {
 
             switch(current->attr.op) {
                case '+':
-                  emitRO((char *)"ADD", 3, 4, 3, (char*)"Op +");
+                  emitRO((char *)"ADD", AC, AC1, AC, (char*)"Op +");
                   break;
                
             }
