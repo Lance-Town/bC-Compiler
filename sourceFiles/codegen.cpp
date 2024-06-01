@@ -183,11 +183,29 @@ void codegenFun(TreeNode *current) {
 void codegenStatement(TreeNode *current) {
    commentLineNum(current);
    int savedToffset;
-   int currloc, skiploc;
+   int currloc, skiploc, skiploc2;
 
    switch (current->kind.stmt) {
       case IfK:
+         emitComment((char *)"IF");
+         codegenExpression(current->child[0]);
+         skiploc = emitSkip(1);
+         emitComment((char *)"THEN");
+         codegenStatement(current->child[1]);
 
+         if (current->child[2] != NULL) {
+            skiploc2 = emitSkip(1);
+         }
+
+         backPatchAJumpToHere((char *)"JZR", AC, skiploc, (char *)"Jump around the THEN if false [backpatch]");
+
+         if (current->child[2] != NULL) {
+            emitComment((char *)"ELSE");
+            codegenStatement(current->child[2]);
+            backPatchAJumpToHere(skiploc2, (char *)"Jump around the ELSE [backpatch]");
+         }
+         
+         emitComment((char *)"END IF");
          break;
 
       case WhileK:
@@ -259,7 +277,7 @@ void codegenStatement(TreeNode *current) {
                codegenExpression(rangeNode->child[2]);
                //emitRM((char *)"LDC", AC, stopoff, AC3, (char *)"Load integer constant");
             } else {
-               // ERROR (?)
+               emitRM((char *)"LDC", AC, 1, 6, (char *)"default increment by 1");
             }
 
             emitRM((char *)"ST", AC, stepoff, FP, (char *)"save step value");
@@ -382,11 +400,18 @@ void codegenExpression(TreeNode *current) {
                
                if (var->varKind == Parameter) {
                   emitRM((char *)"LD", AC2, var->offset, FP, (char *)"Load address of base of array", var->attr.name);
+               } else {
+                  codegenExpression(var);
+               }
+               /*               if (var->varKind == Parameter) {
+                  emitRM((char *)"LD", AC, var->offset, FP, (char *)"Load address of base of array", var->attr.name);
                } else if (var->varKind == Global || var->varKind == LocalStatic) {
                   emitRM((char *)"LDA", AC2, var->offset, GP, (char *)"Load address of base of array", var->attr.name);
+
                } else {
                   emitRM((char *)"LDA", AC2, var->offset, FP, (char *)"Load address of base of array", var->attr.name);
                }
+               */
                
                int op = current->attr.op;
 
@@ -430,6 +455,10 @@ void codegenExpression(TreeNode *current) {
                   case MULASS:
                      emitRM((char *)"LD", AC1, 0, 5, (char *)"load lhs variable", var->attr.name);
                      emitRO((char *)"MUL", AC, AC1, AC, (char *)"op *=");
+                     emitRM((char *)"ST", AC, 0, 5, (char *)"Store variable", var->attr.name);
+                     break;
+
+                  default:
                      emitRM((char *)"ST", AC, 0, 5, (char *)"Store variable", var->attr.name);
                      break;
                }
@@ -540,7 +569,15 @@ void codegenExpression(TreeNode *current) {
 
       case IdK:
          if (current->isArray) {
-            emitRM((char *)"LDA", AC2, current->offset, FP, (char *)"Load address of base of array", current->attr.name);
+            if (current->varKind == Parameter) {
+               emitRM((char *)"LD", AC, current->offset, FP, (char *)"Load address of base of array", current->attr.name);
+            } else if (current->varKind == Global || current->varKind == LocalStatic) {
+               emitRM((char *)"LDA", AC2, current->offset, GP, (char *)"Load address of base of array", current->attr.name);
+
+            } else {
+               emitRM((char *)"LDA", AC2, current->offset, FP, (char *)"Load address of base of array", current->attr.name);
+            }
+            //emitRM((char *)"LDA", AC2, current->offset, FP, (char *)"Load address of base of array", current->attr.name);
          } else {
             emitRM((char *)"LD", AC, -2, FP, (char *)"Load variable", current->attr.name);
          }
@@ -560,10 +597,15 @@ void codegenExpression(TreeNode *current) {
             emitComment((char *)"TOFF inc:", toffset);
             emitRM((char *)"LD", AC1, toffset, FP, (char *)"Pop left into ac1");
 
+            if (current->isArray) {
+
+            }
+
             switch(current->attr.op) {
                case '+':
                   emitRO((char *)"ADD", AC, AC1, AC, (char*)"Op +");
                   break;
+
                
             }
          }
