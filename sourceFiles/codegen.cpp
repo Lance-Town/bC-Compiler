@@ -104,6 +104,29 @@ void codegenLibraryFun(TreeNode *current) {
 }
 
 /*
+ * @brief generate code and emit all parameters for function calls
+ */
+void emitParams(TreeNode *current) {
+   int params = 1;
+   char paramsStr[10];
+   TreeNode *tmp = current;
+
+   while (tmp != NULL) {
+      sprintf(paramsStr, "%d", params);
+      emitComment((char *)"Param", paramsStr);
+      codegenExpression(tmp);
+      emitRM((char *)"ST", AC, toffset, FP, (char *)"Push parameter");
+      toffset--;
+      emitComment((char *)"TOFF dec:", toffset);
+      params++;
+      
+      tmp = tmp->sibling;
+   }
+
+   return;
+}
+
+/*
  * @brief get offset register for different variable kinds
  */
 int offsetRegister(VarKind v) {
@@ -394,8 +417,36 @@ void codegenExpression(TreeNode *current) {
          }
 
       case CallK:
+      {
+         emitComment((char *)"CALL", current->attr.name);
+         
+         TreeNode *funcNode = (TreeNode *)globals->lookup(current->attr.name);
+//         toffset = funcNode->offset;
+         int savedToffset = toffset;
+         int callLoc = funcNode->offset;
+
+         emitRM((char *)"ST", FP, toffset, FP, (char *)"Store fp in ghost frame for", current->attr.name);
+         toffset--;
+         emitComment((char *)"TOFF dec:", toffset);
+         toffset--;
+         emitComment((char *)"TOFF dec:", toffset);
+
+         emitParams(current->child[0]);
+
+         emitComment((char *)"Param end", current->attr.name);
+
+         emitRM((char *)"LDA", FP, savedToffset, FP, (char *)"Ghost frame becomes new active frame");
+         emitRM((char *)"LDA", AC, FP, 7, (char *)"Return address in ac");
+         emitRMAbs((char *)"JMP", PC, callLoc, (char *)"CALL", current->attr.name);
+         emitRM((char *)"LDA", AC, 0, 2, (char *)"Save the result in ac");
+
+         emitComment((char *)"Call end", current->attr.name);
+         toffset = savedToffset;
+
+         emitComment((char *)"TOFF set:", toffset);
 
          break;
+      }
 
       case ConstantK:
          if (current->type == Char) {
