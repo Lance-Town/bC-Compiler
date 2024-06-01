@@ -226,6 +226,8 @@ void codegenStatement(TreeNode *current) {
          break;
 
       case BreakK:
+         emitComment((char *)"BREAK");
+         emitGotoAbs(breakloc, (char *)"break");
 
          break;
 
@@ -299,14 +301,12 @@ void codegenExpression(TreeNode *current) {
                switch(op) {
                   case INC:
                      emitRM((char *)"LD", AC, 0, 5, (char *)"load lhs variable", var->attr.name);
-//                     emitRM((char *)"LD", AC1, var->offset, offReg, (char *)"load lhs variable", var->attr.name);
                      emitRM((char *)"LDA", AC, 1, AC, (char *)"increment value of", var->attr.name);
                      emitRM((char *)"ST", AC, 0, AC2, (char *)"Store variable", var->attr.name);
                      break;
 
                   case DEC:
                      emitRM((char *)"LD", AC, 0, 5, (char *)"load lhs variable", var->attr.name);
-//                     emitRM((char *)"LD", AC1, var->offset, offReg, (char *)"load lhs variable", var->attr.name);
                      emitRM((char *)"LDA", AC, -1, AC, (char *)"decrement value of", var->attr.name);
                      emitRM((char *)"ST", AC, 0, AC2, (char *)"Store variable", var->attr.name);
                      break;
@@ -314,6 +314,24 @@ void codegenExpression(TreeNode *current) {
                   case ADDASS:
                      emitRM((char *)"LD", AC1, 0, 5, (char *)"load lhs variable", var->attr.name);
                      emitRO((char *)"ADD", AC, AC1, AC, (char *)"op +=");
+                     emitRM((char *)"ST", AC, 0, 5, (char *)"Store variable", var->attr.name);
+                     break;
+
+                  case SUBASS:
+                     emitRM((char *)"LD", AC1, 0, 5, (char *)"load lhs variable", var->attr.name);
+                     emitRO((char *)"SUB", AC, AC1, AC, (char *)"op -=");
+                     emitRM((char *)"ST", AC, 0, 5, (char *)"Store variable", var->attr.name);
+                     break;
+
+                  case DIVASS:
+                     emitRM((char *)"LD", AC1, 0, 5, (char *)"load lhs variable", var->attr.name);
+                     emitRO((char *)"DIV", AC, AC1, AC, (char *)"op /=");
+                     emitRM((char *)"ST", AC, 0, 5, (char *)"Store variable", var->attr.name);
+                     break;
+
+                  case MULASS:
+                     emitRM((char *)"LD", AC1, 0, 5, (char *)"load lhs variable", var->attr.name);
+                     emitRO((char *)"MUL", AC, AC1, AC, (char *)"op *=");
                      emitRM((char *)"ST", AC, 0, 5, (char *)"Store variable", var->attr.name);
                      break;
                }
