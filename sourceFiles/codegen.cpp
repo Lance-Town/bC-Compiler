@@ -182,6 +182,8 @@ void codegenFun(TreeNode *current) {
  */
 void codegenStatement(TreeNode *current) {
    commentLineNum(current);
+   int savedToffset;
+   int currloc, skiploc;
 
    switch (current->kind.stmt) {
       case IfK:
@@ -189,7 +191,6 @@ void codegenStatement(TreeNode *current) {
          break;
 
       case WhileK:
-         int currloc, skiploc;
 
          emitComment((char *)"WHILE");
 
@@ -224,11 +225,84 @@ void codegenStatement(TreeNode *current) {
          break;
 
       case ForK:
+         int startoff, stopoff, stepoff;
+         TreeNode *loopindex;
+
+         savedToffset = toffset;
+         toffset = current->size;
+
+         emitComment((char *)"TOFF set:", toffset);
+         emitComment((char *)"FOR");
+
+         loopindex = current->child[0];
+         if (loopindex == NULL) {
+            printf("ERROR(codegen) loop index is null");
+            break;
+         }
+
+         startoff = loopindex->offset;
+         stopoff = startoff-1;
+         stepoff = startoff-2;
+
+         // handle range statement TODO turn into function
+         if (current->child[1] == NULL) {
+            printf("ERROR(codegen) no range in loop");
+            break;
+         } else {
+            TreeNode *rangeNode = current->child[1];
+            codegenExpression(rangeNode->child[0]);
+            emitRM((char *)"ST", AC, startoff, FP, (char *)"save starting value in index variable");
+            codegenExpression(rangeNode->child[1]);
+            emitRM((char *)"ST", AC, stopoff, FP, (char *)"save stop value");
+
+            if (rangeNode->child[2] != NULL) {
+               codegenExpression(rangeNode->child[2]);
+               //emitRM((char *)"LDC", AC, stopoff, AC3, (char *)"Load integer constant");
+            } else {
+               // ERROR (?)
+            }
+
+            emitRM((char *)"ST", AC, stepoff, FP, (char *)"save step value");
+         }
+
+         currloc = emitSkip(0); // return here to do the test
+         emitRM((char *)"LD", AC1, startoff, FP, (char *)"loop index");
+         emitRM((char *)"LD", AC2, stopoff, FP, (char *)"stop value");
+         emitRM((char *)"LD", AC, stepoff, FP, (char *)"step value");
+
+         emitRO((char *)"SLT", 3, 4, 5, (char *)"Op <");
+
+         emitRM((char *)"JNZ", 3, 1, 7, (char *)"Jump to loop body");
+
+         skiploc = breakloc;
+         breakloc = emitSkip(1);
+
+         if (current->child[2] == NULL) {
+            printf("ERROR(codegen) compound for statement empty\n");
+            break;
+         }
+
+         codegenStatement(current->child[2]);
+
+         emitComment((char *)"Bottom of loop increment and jump");
+
+         emitRM((char *)"LD", AC, startoff, FP, (char *)"Load index");
+         emitRM((char *)"LD", AC2, stepoff, FP, (char *)"Load step");
+
+         emitRO((char *)"ADD", AC, AC, AC2, (char *)"increment");
+
+         emitRM((char *)"ST", AC, startoff, FP, (char *)"store back to index");
+
+         emitGotoAbs(currloc, (char *)"go to beginning of loop");
+         backPatchAJumpToHere(breakloc, (char *)"Jump past loop [backpatch]");
+
+         breakloc = skiploc;
+
+         emitComment((char *)"END LOOP");
 
          break;
 
       case CompoundK:
-         int savedToffset;
 
          savedToffset = toffset;
          toffset = current->size;
@@ -255,6 +329,7 @@ void codegenStatement(TreeNode *current) {
          break;
 
       case RangeK:
+
 
          break;
 
@@ -421,7 +496,6 @@ void codegenExpression(TreeNode *current) {
          emitComment((char *)"CALL", current->attr.name);
          
          TreeNode *funcNode = (TreeNode *)globals->lookup(current->attr.name);
-//         toffset = funcNode->offset;
          int savedToffset = toffset;
          int callLoc = funcNode->offset;
 
