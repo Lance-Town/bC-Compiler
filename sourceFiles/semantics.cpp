@@ -16,6 +16,9 @@ static int goffset = 0;
 static int foffset = 0;
 static int varCounter = 0;
 static int newScope = 0;
+static TreeNode *funcInside = NULL; // store which function the children are currently inside
+
+extern int numErrors;
 
 void treeTraverse(TreeNode *current, SymbolTable *symtab);
 TreeNode *loadIOLib(TreeNode *syntree);
@@ -141,6 +144,15 @@ void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
          if (newScope) {   
             symtab->enter((char *)"IfStmt");
             remOffset = foffset;
+            if (current->child[0] && current->child[0]->type != Boolean) {
+               printf("SEMANTIC ERROR(%d): Expecting Boolean test condition in if statement but got %s.\n", current->lineno, expToStr(current->child[0]->type, false, false));
+               numErrors++;
+            }
+
+            if (current->child[0] && current->child[0]->isArray) {
+               printf("SEMANTIC ERROR(%d): Cannot use array as test condition in if statement.\n", current->lineno);
+               numErrors++;
+            }
             treeTraverse(current->child[0], symtab);
             current->size = foffset;
             treeTraverse(current->child[1], symtab);
@@ -160,6 +172,15 @@ void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
          if (newScope) {   
             symtab->enter((char *)"WhileStmt");
             remOffset = foffset;
+            if (current->child[0] && current->child[0]->type != Boolean) {
+               printf("SEMANTIC ERROR(%d): Expecting Boolean test condition in while statement but got %s.\n", current->lineno, expToStr(current->child[0]->type, false, false));
+               numErrors++;
+            }
+
+            if (current->child[0] && current->child[0]->isArray) {
+               printf("SEMANTIC ERROR(%d): Cannot use array as test condition in while statement.\n", current->lineno);
+               numErrors++;
+            }
             treeTraverse(current->child[0], symtab);
             current->size = foffset;
             treeTraverse(current->child[1], symtab);
@@ -218,6 +239,31 @@ void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
          break;
 
       case ReturnK:
+         if (current->child[0] == NULL && funcInside != NULL) {
+            printf("SEMANTIC ERROR(%d): Function '%s' at line %d is expecting to return %s but return has no value.\n",
+                  current->lineno, funcInside->attr.name, funcInside->lineno, expToStr(funcInside->type, false, false));
+            numErrors++;
+         }
+
+         if (current->child[0] != NULL) {
+            TreeNode * lookupNode = (TreeNode * ) symtab->lookup(current->child[0]->attr.name);
+
+            if (lookupNode != NULL && lookupNode->isArray) {
+               printf("SEMANTIC ERROR(%d): Cannot return an array.\n", current->lineno);
+               numErrors++;
+            } else if (funcInside != NULL && funcInside->type != current->child[0]->type) {
+               if (funcInside->type == Void) {
+                  printf("SEMANTIC ERROR(%d): Function '%s' at line %d is expecting no return value, but return has a value.\n", 
+                        current->lineno, funcInside->attr.name, funcInside->lineno);
+               } else {
+                  printf("SEMANTIC ERROR(%d): Function '%s' at line %d is expecting to return %s but returns %s.\n",
+                     current->lineno, funcInside->attr.name, funcInside->lineno,
+                     expToStr(funcInside->type, false, false), expToStr(current->child[0]->type, false, false));
+               }
+               numErrors++;
+            }
+         }
+
          treeTraverse(current->child[0], symtab);
          treeTraverse(current->child[1], symtab);
          treeTraverse(current->child[2], symtab);
@@ -225,6 +271,10 @@ void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
          break;
 
       case BreakK:
+         if (symtab->depth() <= 2) {
+            printf("SEMANTIC ERROR(%d): Cannot have a break statement outside of loop.\n", current->lineno);
+            numErrors++;
+         }
          treeTraverse(current->child[0], symtab);
          treeTraverse(current->child[1], symtab);
          treeTraverse(current->child[2], symtab);
@@ -416,6 +466,9 @@ void treeDeclTraverse(TreeNode *current, SymbolTable *symtab) {
          insertError(current, symtab);
 
          symtab->enter(current->attr.name);
+
+         // store which function we are in for children to reference
+         funcInside = current;
          
          treeTraverse(current->child[0], symtab);
          current->size = foffset;
