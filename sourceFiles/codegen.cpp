@@ -337,7 +337,15 @@ void codegenStatement(TreeNode *current) {
          break;
 
       case ReturnK:
+         emitComment((char *)"RETURN");
+         if (current->child[0] != NULL) {
+            codegenExpression(current->child[0]);
+            emitRM((char *)"LDA", 2, 0, AC, (char *)"Copy result to return register");
+         }
 
+         emitRM((char *)"LD", AC, -1, FP, (char *)"Load return address");
+         emitRM((char *)"LD", FP, GP, FP, (char *)"Adjust fp");
+         emitGoto(GP, AC, (char *)"Return");
          break;
 
       case BreakK:
@@ -656,6 +664,18 @@ void codegenExpression(TreeNode *current) {
             case NOT:
                emitRM((char *)"LDC", AC1, 1, 6, (char *)"Load 1");
                emitRO((char *)"XOR", AC, AC, AC1, (char *)"Op XOR to get logical not");
+               break;
+
+            case '?':
+               emitRO((char *)"RND", AC, AC, 6, (char *)"Op ?");
+               break;
+
+            case SIZEOF:
+               emitRM((char *)"LD", AC, 1, AC, (char *)"Load array size");
+               break;
+
+            case CHSIGN:
+               emitRO((char *)"NEG", AC, AC, AC, (char *)"Op unary -");
                break;
          }
 
