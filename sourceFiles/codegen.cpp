@@ -191,7 +191,6 @@ void codegenStatement(TreeNode *current) {
          codegenExpression(current->child[0]);
          skiploc = emitSkip(1);
          emitComment((char *)"THEN");
-         //codegenStatement(current->child[1]);
          codegenGeneral(current->child[1]);
 
          if (current->child[2] != NULL) {
@@ -202,7 +201,6 @@ void codegenStatement(TreeNode *current) {
 
          if (current->child[2] != NULL) {
             emitComment((char *)"ELSE");
-//            codegenStatement(current->child[2]);
             codegenGeneral(current->child[2]);
             backPatchAJumpToHere(skiploc2, (char *)"Jump around the ELSE [backpatch]");
          }
@@ -271,16 +269,12 @@ void codegenStatement(TreeNode *current) {
          } else {
             TreeNode *rangeNode = current->child[1];
             codegenExpression(rangeNode->child[0]);
-//            codegenGeneral(rangeNode->child[0]);
             emitRM((char *)"ST", AC, startoff, FP, (char *)"save starting value in index variable");
             codegenExpression(rangeNode->child[1]);
-//            codegenGeneral(rangeNode->child[1]);
             emitRM((char *)"ST", AC, stopoff, FP, (char *)"save stop value");
 
             if (rangeNode->child[2] != NULL) {
                codegenExpression(rangeNode->child[2]);
-//               codegenGeneral(rangeNode->child[2]);
-               //emitRM((char *)"LDC", AC, stopoff, AC3, (char *)"Load integer constant");
             } else {
                emitRM((char *)"LDC", AC, 1, 6, (char *)"default increment by 1");
             }
@@ -305,7 +299,6 @@ void codegenStatement(TreeNode *current) {
             break;
          }
 
-//         codegenStatement(current->child[2]);
          codegenGeneral(current->child[2]);
 
          emitComment((char *)"Bottom of loop increment and jump");
@@ -361,8 +354,7 @@ void codegenStatement(TreeNode *current) {
          break;
 
       case RangeK:
-
-
+         // do nothing
          break;
 
       default:
@@ -412,14 +404,6 @@ void codegenExpression(TreeNode *current) {
                   emitRM((char *)"LD", AC1, toffset, FP, (char *)"Pop index");
                }
                
-               /*
-               if (var->varKind == Parameter) {
-                  emitRM((char *)"LD", AC2, var->offset, FP, (char *)"Load address of base of array", var->attr.name);
-               } else {
-                  codegenExpression(var);
-               }
-               */
-
                if (var->varKind == Parameter) {
                   emitRM((char *)"LD", AC2, var->offset, FP, (char *)"Load address of base of array", var->attr.name);
                } else if (var->varKind == Local) {
@@ -586,25 +570,12 @@ void codegenExpression(TreeNode *current) {
          if (current->isArray) {
             int offReg = offsetRegister(current->varKind);
 
-            /*
-            if (current->varKind == Parameter) {
-               emitRM((char *)"LD", AC, current->offset, FP, (char *)"Load address of base of array", current->attr.name);
-            } else if (current->varKind == Global || current->varKind == LocalStatic) {
-               emitRM((char *)"LDA", AC2, current->offset, GP, (char *)"Load address of base of array", current->attr.name);
-            } else {
-               emitRM((char *)"LDA", AC2, current->offset, FP, (char *)"Load address of base of array", current->attr.name);
-            }
-            */
-            //emitRM((char *)"LDA", AC2, current->offset, FP, (char *)"Load address of base of array", current->attr.name);
-
-
             if (current->varKind == Parameter) {
                emitRM((char *)"LD", AC, current->offset, offReg, (char *)"Load address of base of array", current->attr.name);
             } else {
                emitRM((char *)"LDA", AC, current->offset, offReg, (char *)"Load address of base of array", current->attr.name);
             }
          } else {
-//            emitRM((char *)"LD", AC, -2, FP, (char *)"Load variable", current->attr.name);
             int offReg = offsetRegister(current->varKind);
             emitRM((char *)"LD", AC, current->offset, offReg, (char *)"Load variable", current->attr.name);
          }
@@ -708,8 +679,6 @@ void codegenExpression(TreeNode *current) {
                emitRO((char *)"NEG", AC, AC, AC, (char *)"Op unary -");
                break;
          }
-
-         // TODO: more code to come
 
          break;
    }    
