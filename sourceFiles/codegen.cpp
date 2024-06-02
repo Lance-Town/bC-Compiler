@@ -573,7 +573,6 @@ void codegenExpression(TreeNode *current) {
                emitRM((char *)"LD", AC, current->offset, FP, (char *)"Load address of base of array", current->attr.name);
             } else if (current->varKind == Global || current->varKind == LocalStatic) {
                emitRM((char *)"LDA", AC2, current->offset, GP, (char *)"Load address of base of array", current->attr.name);
-
             } else {
                emitRM((char *)"LDA", AC2, current->offset, FP, (char *)"Load address of base of array", current->attr.name);
             }
@@ -606,7 +605,53 @@ void codegenExpression(TreeNode *current) {
                   emitRO((char *)"ADD", AC, AC1, AC, (char*)"Op +");
                   break;
 
-               
+               case AND:
+                  emitRO((char *)"AND", AC, AC1, AC, (char*)"Op AND");
+                  break;
+
+               case OR:
+                  emitRO((char *)"OR", AC, AC1, AC, (char*)"Op OR");
+                  break;
+
+               case '-':
+                  emitRO((char *)"SUB", AC, AC1, AC, (char*)"Op -");
+                  break;
+
+               case '*':
+                  emitRO((char *)"MUL", AC, AC1, AC, (char*)"Op *");
+                  break;
+
+               case '/':
+                  emitRO((char *)"DIV", AC, AC1, AC, (char*)"Op /");
+                  break;
+
+               case '%':
+                  emitRO((char *)"MOD", AC, AC1, AC, (char*)"Op %");
+                  break;
+
+               case NEQ:
+                  emitRO((char *)"TNE", AC, AC1, AC, (char*)"Op !=");
+                  break;
+
+               case EQ:
+                  emitRO((char *)"TEQ", AC, AC1, AC, (char*)"Op ==");
+                  break;
+
+               case GEQ:
+                  emitRO((char *)"TGE", AC, AC1, AC, (char*)"Op >=");
+                  break;
+
+               case LEQ:
+                  emitRO((char *)"TLE", AC, AC1, AC, (char*)"Op <=");
+                  break;
+
+               case '<':
+                  emitRO((char *)"TLT", AC, AC1, AC, (char*)"Op <");
+                  break;
+
+               case '>':
+                  emitRO((char *)"TGT", AC, AC1, AC, (char*)"Op >");
+                  break;
             }
          }
 
