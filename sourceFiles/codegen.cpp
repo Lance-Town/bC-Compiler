@@ -191,7 +191,8 @@ void codegenStatement(TreeNode *current) {
          codegenExpression(current->child[0]);
          skiploc = emitSkip(1);
          emitComment((char *)"THEN");
-         codegenStatement(current->child[1]);
+         //codegenStatement(current->child[1]);
+         codegenGeneral(current->child[1]);
 
          if (current->child[2] != NULL) {
             skiploc2 = emitSkip(1);
@@ -406,10 +407,20 @@ void codegenExpression(TreeNode *current) {
                   emitRM((char *)"LD", AC1, toffset, FP, (char *)"Pop index");
                }
                
+               /*
                if (var->varKind == Parameter) {
                   emitRM((char *)"LD", AC2, var->offset, FP, (char *)"Load address of base of array", var->attr.name);
                } else {
                   codegenExpression(var);
+               }
+               */
+
+               if (var->varKind == Parameter) {
+                  emitRM((char *)"LD", AC2, var->offset, FP, (char *)"Load address of base of array", var->attr.name);
+               } else if (var->varKind == Local) {
+                  emitRM((char *)"LDA", AC2, var->offset, FP, (char *)"Load address of base of array", var->attr.name);
+               } else if (var->varKind == LocalStatic || var->varKind == Global) {
+                  emitRM((char *)"LDA", AC2, var->offset, GP, (char *)"Load address of base of array", var->attr.name);
                }
                
                int op = current->attr.op;
@@ -568,6 +579,9 @@ void codegenExpression(TreeNode *current) {
 
       case IdK:
          if (current->isArray) {
+            int offReg = offsetRegister(current->varKind);
+
+            /*
             if (current->varKind == Parameter) {
                emitRM((char *)"LD", AC, current->offset, FP, (char *)"Load address of base of array", current->attr.name);
             } else if (current->varKind == Global || current->varKind == LocalStatic) {
@@ -575,9 +589,19 @@ void codegenExpression(TreeNode *current) {
             } else {
                emitRM((char *)"LDA", AC2, current->offset, FP, (char *)"Load address of base of array", current->attr.name);
             }
+            */
             //emitRM((char *)"LDA", AC2, current->offset, FP, (char *)"Load address of base of array", current->attr.name);
+
+
+            if (current->varKind == Parameter) {
+               emitRM((char *)"LD", AC, current->offset, offReg, (char *)"Load address of base of array", current->attr.name);
+            } else {
+               emitRM((char *)"LDA", AC, current->offset, offReg, (char *)"Load address of base of array", current->attr.name);
+            }
          } else {
-            emitRM((char *)"LD", AC, -2, FP, (char *)"Load variable", current->attr.name);
+//            emitRM((char *)"LD", AC, -2, FP, (char *)"Load variable", current->attr.name);
+            int offReg = offsetRegister(current->varKind);
+            emitRM((char *)"LD", AC, current->offset, offReg, (char *)"Load variable", current->attr.name);
          }
          break;
 
@@ -596,7 +620,8 @@ void codegenExpression(TreeNode *current) {
             emitRM((char *)"LD", AC1, toffset, FP, (char *)"Pop left into ac1");
 
             if (current->isArray) {
-
+               emitRO((char *)"SUB", AC, AC1, AC, (char *)"compute location from index");
+               emitRM((char *)"LD", AC, GP, AC, (char *)"Load array element");
             }
          }
 
