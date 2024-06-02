@@ -9,12 +9,13 @@
 #include <cstdio>
 #include <iostream>
 #include <unistd.h>
+#include "codegen.h"
+#include "yyerror.h"
+#include "scanType.h"
+#include "semantics.h"
+#include "symbolTable.h"
 #include "treeNodes.h"
 #include "treeUtils.h"
-#include "codegen.h"
-#include "scanType.h"
-#include "symbolTable.h"
-#include "semantics.h"
 
 using namespace std;
 
@@ -37,8 +38,8 @@ void printToken(TokenData myData, string tokenName, int type = 0) {
 
 /* Abstract Syntrax Tree */
 static TreeNode* syntaxTree;
-static int numErrors;
-static int numWarnings;
+int numErrors;
+int numWarnings;
 
 %}
 
@@ -305,16 +306,6 @@ constant   : NUMCONST                                   { $$ = newExpNode(Consta
 
 %%
 
-/*
- * @brief output error messages
- *
- * @param msg - error message to output
- *
- * @return void
-*/
-void yyerror (const char *msg) { 
-   printf("Syntax error at line %d: %s\n", yylval.tinfo->linenum, msg);
-}
 
 /*
  * @brief driver code to run the compiler
@@ -329,6 +320,7 @@ int main(int argc, char **argv) {
    symtab->debug(false);
    int globalOffset;
 
+   initErrorProcessing();
    initTokenStrings();
 
    while ((option = getopt (argc, argv, "")) != -1)
