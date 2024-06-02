@@ -403,15 +403,6 @@ void codegenExpression(TreeNode *current) {
                } else {
                   codegenExpression(var);
                }
-               /*               if (var->varKind == Parameter) {
-                  emitRM((char *)"LD", AC, var->offset, FP, (char *)"Load address of base of array", var->attr.name);
-               } else if (var->varKind == Global || var->varKind == LocalStatic) {
-                  emitRM((char *)"LDA", AC2, var->offset, GP, (char *)"Load address of base of array", var->attr.name);
-
-               } else {
-                  emitRM((char *)"LDA", AC2, var->offset, FP, (char *)"Load address of base of array", var->attr.name);
-               }
-               */
                
                int op = current->attr.op;
 
@@ -599,60 +590,73 @@ void codegenExpression(TreeNode *current) {
             if (current->isArray) {
 
             }
+         }
 
-            switch(current->attr.op) {
-               case '+':
-                  emitRO((char *)"ADD", AC, AC1, AC, (char*)"Op +");
-                  break;
+          switch(current->attr.op) {
+            case '+':
+               emitRO((char *)"ADD", AC, AC1, AC, (char*)"Op +");
+               break;
 
-               case AND:
-                  emitRO((char *)"AND", AC, AC1, AC, (char*)"Op AND");
-                  break;
+            case AND:
+               emitRO((char *)"AND", AC, AC1, AC, (char*)"Op AND");
+               break;
 
-               case OR:
-                  emitRO((char *)"OR", AC, AC1, AC, (char*)"Op OR");
-                  break;
+            case OR:
+               emitRO((char *)"OR", AC, AC1, AC, (char*)"Op OR");
+               break;
 
-               case '-':
-                  emitRO((char *)"SUB", AC, AC1, AC, (char*)"Op -");
-                  break;
+            case '-':
+               emitRO((char *)"SUB", AC, AC1, AC, (char*)"Op -");
+               break;
 
-               case '*':
-                  emitRO((char *)"MUL", AC, AC1, AC, (char*)"Op *");
-                  break;
+            case '*':
+               emitRO((char *)"MUL", AC, AC1, AC, (char*)"Op *");
+               break;
 
-               case '/':
-                  emitRO((char *)"DIV", AC, AC1, AC, (char*)"Op /");
-                  break;
+            case '/':
+               emitRO((char *)"DIV", AC, AC1, AC, (char*)"Op /");
+               break;
 
-               case '%':
-                  emitRO((char *)"MOD", AC, AC1, AC, (char*)"Op %");
-                  break;
+            case '%':
+               emitRO((char *)"MOD", AC, AC1, AC, (char*)"Op %");
+               break;
 
-               case NEQ:
-                  emitRO((char *)"TNE", AC, AC1, AC, (char*)"Op !=");
-                  break;
+            case NEQ:
+               emitRO((char *)"TNE", AC, AC1, AC, (char*)"Op !=");
+               break;
 
-               case EQ:
-                  emitRO((char *)"TEQ", AC, AC1, AC, (char*)"Op ==");
-                  break;
+            case EQ:
+               emitRO((char *)"TEQ", AC, AC1, AC, (char*)"Op ==");
+               break;
 
-               case GEQ:
-                  emitRO((char *)"TGE", AC, AC1, AC, (char*)"Op >=");
-                  break;
+            case GEQ:
+               emitRO((char *)"TGE", AC, AC1, AC, (char*)"Op >=");
+               break;
 
-               case LEQ:
-                  emitRO((char *)"TLE", AC, AC1, AC, (char*)"Op <=");
-                  break;
+            case LEQ:
+               emitRO((char *)"TLE", AC, AC1, AC, (char*)"Op <=");
+               break;
 
-               case '<':
-                  emitRO((char *)"TLT", AC, AC1, AC, (char*)"Op <");
-                  break;
+            case '<':
+               emitRO((char *)"TLT", AC, AC1, AC, (char*)"Op <");
+               break;
 
-               case '>':
-                  emitRO((char *)"TGT", AC, AC1, AC, (char*)"Op >");
-                  break;
-            }
+            case '>':
+               emitRO((char *)"TGT", AC, AC1, AC, (char*)"Op >");
+               break;
+
+            case MIN:
+               emitRO((char *)"SWP", AC, AC1, AC, (char*)"Op :<:");
+               break;
+
+            case MAX:
+               emitRO((char *)"SWP", AC1, AC, AC, (char*)"Op :>:");
+               break;
+
+            case NOT:
+               emitRM((char *)"LDC", AC1, 1, 6, (char *)"Load 1");
+               emitRO((char *)"XOR", AC, AC, AC1, (char *)"Op XOR to get logical not");
+               break;
          }
 
          // TODO: more code to come
