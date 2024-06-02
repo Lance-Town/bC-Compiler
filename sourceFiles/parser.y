@@ -23,8 +23,6 @@ extern "C" int yylex();
 extern "C" int yyparse();
 extern "C" FILE *yyin;
 
-void yyerror(const char *msg);
-
 void printToken(TokenData myData, string tokenName, int type = 0) {
    cout << "Line: " << myData.linenum << " Type: " << tokenName;
    if(type==0)
@@ -339,6 +337,15 @@ int main(int argc, char **argv) {
 
    if (numErrors == 0) {
       syntaxTree = semanticAnalysis(syntaxTree, symtab, globalOffset);
+   }
+
+   if (numErrors == 0) {
+      TreeNode *lookupNode = (TreeNode *)symtab->lookup("main");
+
+      if (lookupNode == NULL) {
+         printf("LINKER ERROR: A function named 'main' with no parameters must be defined.\n");
+         numErrors++;
+      }
    }
 
    if (numErrors == 0) {
