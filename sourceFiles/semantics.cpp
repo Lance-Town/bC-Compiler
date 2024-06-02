@@ -136,7 +136,8 @@ void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
    if (current->kind.stmt != CompoundK) {
       newScope = 1;
    }
-
+   
+   TreeNode *lookupNode;
    int remOffset;
 
    switch (current->kind.stmt) {
@@ -239,14 +240,20 @@ void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
          break;
 
       case ReturnK:
-         if (current->child[0] == NULL && funcInside != NULL) {
+
+         treeTraverse(current->child[0], symtab);
+         treeTraverse(current->child[1], symtab);
+         treeTraverse(current->child[2], symtab);
+
+
+         if (current->child[0] == NULL && funcInside != NULL && funcInside->type != UndefinedType) {
             printf("SEMANTIC ERROR(%d): Function '%s' at line %d is expecting to return %s but return has no value.\n",
                   current->lineno, funcInside->attr.name, funcInside->lineno, expToStr(funcInside->type, false, false));
             numErrors++;
-         }
-
+         } 
+         
          if (current->child[0] != NULL) {
-            TreeNode * lookupNode = (TreeNode * ) symtab->lookup(current->child[0]->attr.name);
+            lookupNode = (TreeNode *) symtab->lookup(current->child[0]->attr.name);
 
             if (lookupNode != NULL && lookupNode->isArray) {
                printf("SEMANTIC ERROR(%d): Cannot return an array.\n", current->lineno);
@@ -263,10 +270,6 @@ void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
                numErrors++;
             }
          }
-
-         treeTraverse(current->child[0], symtab);
-         treeTraverse(current->child[1], symtab);
-         treeTraverse(current->child[2], symtab);
 
          break;
 
@@ -360,6 +363,11 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
          lookupNode = (TreeNode *)symtab->lookup(current->attr.name);
 
          if (lookupNode != NULL) {
+            if (lookupNode->kind.decl == FuncK) {
+               printf("SEMANTIC ERROR(%d): Cannot use function '%s' as a variable.\n", current->lineno, lookupNode->attr.name);
+               numErrors++;
+            }
+
             current->offset = lookupNode->offset;
             current->type = lookupNode->type;
             current->size = lookupNode->size;
@@ -367,6 +375,8 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
             current->isArray = lookupNode->isArray;
             current->isStatic = lookupNode->isStatic;
          } else {
+            printf("SEMANTIC ERROR(%d): Symbol '%s' is not declared.\n", current->lineno, current->attr.name);
+            numErrors++;
            
          }
 
@@ -418,6 +428,7 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
  */
 void treeDeclTraverse(TreeNode *current, SymbolTable *symtab) {
    newScope = 1;
+   TreeNode *lookupNode;
 
    switch (current->kind.decl) {
       case VarK:
@@ -447,6 +458,11 @@ void treeDeclTraverse(TreeNode *current, SymbolTable *symtab) {
                current->offset = foffset;
                foffset -= current->size;
             }
+         } else {
+            lookupNode = (TreeNode *)symtab->lookup(current->attr.name);
+            printf("SEMANTIC ERROR(%d): Symbol '%s' is already declared at line %d.\n", 
+                  current->lineno, current->attr.name, lookupNode->lineno);
+            numErrors++;
          }
 
          if (current->kind.decl == ParamK) {
@@ -463,7 +479,12 @@ void treeDeclTraverse(TreeNode *current, SymbolTable *symtab) {
          newScope = 0;
          foffset = -2;
          
-         insertError(current, symtab);
+         if (insertError(current, symtab) == false) {
+            lookupNode = (TreeNode *)symtab->lookup(current->attr.name);
+            printf("SEMANTIC ERROR(%d): Symbol '%s' is already declared at line %d.\n", 
+                  current->lineno, current->attr.name, lookupNode->lineno);
+            numErrors++;
+         }
 
          symtab->enter(current->attr.name);
 
