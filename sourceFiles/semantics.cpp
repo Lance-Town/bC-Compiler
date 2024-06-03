@@ -19,6 +19,7 @@ static int newScope = 0;
 static TreeNode *funcInside = NULL; // store which function the children are currently inside
 
 extern int numErrors;
+extern int numWarnings;
 extern char *largerTokens[LASTTERM+1];
 
 void treeTraverse(TreeNode *current, SymbolTable *symtab);
@@ -115,6 +116,8 @@ void handleOpErrors(TreeNode *current, SymbolTable *symtab) {
    int op = current->attr.op;
    TreeNode *lhs = NULL, *rhs = NULL; 
 
+   TreeNode *lookupNode = (TreeNode *)symtab->lookup(current->attr.name);
+
    if (current->child[0] == NULL) {
       printf("SYNTAX ERROR(%d): child 0 cannot be NULL\n", current->lineno);
       numErrors++;
@@ -132,6 +135,10 @@ void handleOpErrors(TreeNode *current, SymbolTable *symtab) {
    }
    if (current->child[1] != NULL && rhs == NULL) {
       rhs = current->child[1];
+   }
+
+   if (lhs->type == UndefinedType) {
+      return;
    }
 
 
@@ -175,7 +182,6 @@ void handleOpErrors(TreeNode *current, SymbolTable *symtab) {
          numErrors++;
       }
    } else if (op == '=' || op == EQ || op == NEQ || op == '>' || op == GEQ || op == '<' || op == LEQ) {
-      
       if (lhs->type != rhs->type) {
          printf("SEMANTIC ERROR(%d): '%s' requires operands of the same type but lhs is %s and rhs is %s.\n",
                current->lineno, largerTokens[op], expToStr(lhs->type, false, false), expToStr(rhs->type, false, false));
@@ -366,8 +372,7 @@ void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
          treeTraverse(current->child[1], symtab);
          treeTraverse(current->child[2], symtab);
 
-
-         if (current->child[0] == NULL && funcInside != NULL && funcInside->type != UndefinedType) {
+         if (current->child[0] == NULL && funcInside != NULL) {
             printf("SEMANTIC ERROR(%d): Function '%s' at line %d is expecting to return %s but return has no value.\n",
                   current->lineno, funcInside->attr.name, funcInside->lineno, expToStr(funcInside->type, false, false));
             numErrors++;
@@ -376,7 +381,9 @@ void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
          if (current->child[0] != NULL) {
             lookupNode = (TreeNode *) symtab->lookup(current->child[0]->attr.name);
 
-            if (lookupNode != NULL && lookupNode->isArray) {
+            if (current->child[0]->type == UndefinedType) {
+               // error thrown elsewhere
+            } else if (lookupNode != NULL && lookupNode->isArray) {
                printf("SEMANTIC ERROR(%d): Cannot return an array.\n", current->lineno);
                numErrors++;
             } else if (funcInside != NULL && funcInside->type != current->child[0]->type) {
@@ -406,9 +413,49 @@ void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
          break;
 
       case RangeK:
+         for (int i = 0; i < MAXCHILDREN; i++) {
+            if (current->child[i] != NULL) {
+               if (current->child[i]->type != Integer) {
+                  printf("SEMANTIC ERROR(%d): Expecting type int in position %d in range of for statement but got %s.\n",
+                        current->lineno, i+1, expToStr(current->child[i]->type, false, false));
+                  numErrors++;
+               }
+               if (current->child[i]->isArray) {
+                  printf("SEMANTIC ERROR(%d): Cannot use array in position %d in range of for statement.\n",
+                        current->lineno, i+1);
+                  numErrors++;
+               }
+            }
+
+         }
+
+         /*
+         if (current->child[0] != NULL) {
+            if (current->child[0]->type != Integer) {
+            }
+         }
+         if (current->child[1] != NULL) {
+            if (current->child[1]->type != Integer) {
+               printf("SEMANTIC ERROR(%d): Expecting type int in position 2 in range of for statement but got %s.\n",
+                     current->lineno, expToStr(current->child[1]->type, false, false));
+               numErrors++;
+            }
+         }
+
+         if (current->child[2] != NULL) {
+            if (current->child[2]->type != Integer) {
+               printf("SEMANTIC ERROR(%d): Expecting type int in position 3 in range of for statement but got %s.\n",
+                     current->lineno, expToStr(current->child[2]->type, false, false));
+               numErrors++;
+            }
+
+         }
+         */
+         
          treeTraverse(current->child[0], symtab);
          treeTraverse(current->child[1], symtab);
          treeTraverse(current->child[2], symtab);
+
 
          break;
    }
@@ -433,6 +480,10 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
          treeTraverse(current->child[0], symtab);
 
          handleOpErrors(current, symtab);
+
+         if (current->attr.op == '=') {
+//            current->isUsed = true;
+         }
 
          if (current->child[0] == NULL) {
             //printf("ERROR: left child has no type - semantics.cpp::treeExpTraverse()\t%s\n", current->attr.name);
@@ -462,6 +513,7 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
          lookupNode = (TreeNode *) symtab->lookup(current->attr.name);
          if (lookupNode == NULL) {
             printf("SEMANTIC ERROR(%d): Symbol '%s' is not declared.\n", current->lineno, current->attr.name);
+            current->type = UndefinedType;
             numErrors++;
          } else {
             current->type = lookupNode->type;
@@ -498,8 +550,14 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
             current->varKind = lookupNode->varKind;
             current->isArray = lookupNode->isArray;
             current->isStatic = lookupNode->isStatic;
+
+//            if (!lookupNode->isUsed) {
+//               printf("SEMANTIC WARNING(%d): Variable '%s' may be uninitialized when used here.\n", current->lineno, lookupNode->attr.name);
+//               numWarnings++;
+//            }
          } else {
             printf("SEMANTIC ERROR(%d): Symbol '%s' is not declared.\n", current->lineno, current->attr.name);
+            current->type = UndefinedType;
             numErrors++;
            
          }
@@ -560,7 +618,32 @@ void treeDeclTraverse(TreeNode *current, SymbolTable *symtab) {
 
    switch (current->kind.decl) {
       case VarK:
-         treeTraverse(current->child[0], symtab);
+         treeTraverse(current->child[0], symtab);      
+         if (current->child[0] != NULL) {
+//            printf("current: %s\tcurrent->child: %s\n", current->attr.name, current->child[0]->attr.name);
+            if (current->type != current->child[0]->type) {
+               printf("SEMANTIC ERROR(%d): Initializer for variable '%s' of %s is of %s\n", 
+                     current->lineno, current->attr.name, expToStr(current->type, false, false), 
+                     expToStr(current->child[0]->type, false, false));
+               numErrors++;
+            }
+
+            if (current->child[0]->kind.exp != ConstantK) {
+               printf("SEMANTIC ERROR(%d): Initializer for variable '%s' is not a constant expression.\n", current->lineno, current->attr.name);
+               numErrors++;
+            }
+
+            if (current->isArray && !current->child[0]->isArray) {
+               printf("SEMANTIC ERROR(%d): Initializer for variable '%s' requires both operands be arrays or not but variable is an array and rhs is not an array.\n",
+                     current->lineno, current->attr.name);
+               numErrors++;
+            }
+            if (!current->isArray && current->child[0]->isArray) {
+               printf("SEMANTIC ERROR(%d): Initializer for variable '%s' requires both operands be arrays or not but variable is not an array and rhs is an array.\n",
+                     current->lineno, current->attr.name);
+               numErrors++;
+            }
+         }
          // no break on purpose, follow through into ParamK
       case ParamK:
          if (insertError(current, symtab)) {
@@ -616,10 +699,12 @@ void treeDeclTraverse(TreeNode *current, SymbolTable *symtab) {
 
          symtab->enter(current->attr.name);
 
+
          // store which function we are in for children to reference
          funcInside = current;
          
          treeTraverse(current->child[0], symtab);
+//         current->isUsed = true;
          current->size = foffset;
          treeTraverse(current->child[1], symtab);
          treeTraverse(current->child[2], symtab);
