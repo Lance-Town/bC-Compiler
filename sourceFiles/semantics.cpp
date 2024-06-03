@@ -469,32 +469,34 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
    switch(current->kind.exp) {
       case AssignK:
          
-         treeTraverse(current->child[0], symtab);
-
-         handleOpErrors(current, symtab);
 
          if (current->attr.op == '=') {
-//            current->isUsed = true;
+//            current->isAssigned = true;
          }
 
          if (current->child[0] == NULL) {
             //printf("ERROR: left child has no type - semantics.cpp::treeExpTraverse()\t%s\n", current->attr.name);
          } else {
-            // loop up childs type and set it to current type
+            // look up childs type and set it to current type
             lookupNode = 
                (TreeNode *) symtab->lookup(current->child[0]->attr.name);
 
             if (lookupNode == NULL) {
-//               printf("ERROR: %s Child not in symbol table, but child %s exists\n", current->attr.name, current->child[0]->attr.name);
-
                // child is not in the symbol table, but it does exist
                // FIX for array not being in symbol table, but the child existing. 
                current->type = current->child[0]->type;
+               current->child[0]->isAssigned = true;
+               current->child[0]->isUsed = true;
             } else {
+               lookupNode->isAssigned = true;
+               lookupNode->isUsed = true;
                current->type = lookupNode->type;
             }
+
          }
 
+         treeTraverse(current->child[0], symtab);
+         handleOpErrors(current, symtab);
          treeTraverse(current->child[1], symtab);
          treeTraverse(current->child[2], symtab);
 
@@ -586,11 +588,14 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
             current->varKind = lookupNode->varKind;
             current->isArray = lookupNode->isArray;
             current->isStatic = lookupNode->isStatic;
+            current->isUsed = true;
+            lookupNode->isUsed = true;
 
-//            if (!lookupNode->isUsed) {
-//               printf("SEMANTIC WARNING(%d): Variable '%s' may be uninitialized when used here.\n", current->lineno, lookupNode->attr.name);
-//               numWarnings++;
-//            }
+            if (!lookupNode->isAssigned && !lookupNode->isArray && lookupNode->kind.decl == VarK) {
+               printf("SEMANTIC WARNING(%d): Variable '%s' may be uninitialized when used here.\n", current->lineno, lookupNode->attr.name);
+               lookupNode->isAssigned = true;
+               numWarnings++;
+            }
          } else {
             printf("SEMANTIC ERROR(%d): Symbol '%s' is not declared.\n", current->lineno, current->attr.name);
             current->type = UndefinedType;
@@ -682,6 +687,10 @@ void treeDeclTraverse(TreeNode *current, SymbolTable *symtab) {
          }
          // no break on purpose, follow through into ParamK
       case ParamK:
+         if (current->child[0] != NULL) {
+           current->isAssigned = true; 
+         }
+
          if (insertError(current, symtab)) {
             if (symtab->depth() == 1) {
                current->varKind = Global;
@@ -740,7 +749,6 @@ void treeDeclTraverse(TreeNode *current, SymbolTable *symtab) {
          funcInside = current;
          
          treeTraverse(current->child[0], symtab);
-//         current->isUsed = true;
          current->size = foffset;
          treeTraverse(current->child[1], symtab);
          treeTraverse(current->child[2], symtab);
@@ -783,6 +791,46 @@ void treeTraverse(TreeNode *current, SymbolTable *symtab) {
    }
 }
 
+void checkIsUsed(std::string str, void *node) {
+   TreeNode *tree = (TreeNode *)node;
+
+   if (tree && !tree->isUsed && tree->lineno != -1) {
+      switch (tree->kind.decl) {
+         case VarK: {
+            char *pos = strchr(tree->attr.name, '-');
+            if (pos != NULL) {
+               *pos = '\0';
+            }
+
+            printf("SEMANTIC WARNING(%d): The variable '%s' seems not to be used.\n",
+                  tree->lineno, tree->attr.name);
+            tree->isUsed = true;
+            numWarnings++;
+            break;           
+         }
+         case ParamK:
+            printf("SEMANTIC WARNING(%d): The parameter '%s' seems not to be used.\n",
+                  tree->lineno, tree->attr.name);
+            numWarnings++;
+            tree->isUsed = true;
+            break;
+
+         case FuncK:
+            if (strcmp(tree->attr.name, "main") == 0) {
+               break;
+            }
+            
+            printf("SEMANTIC WARNING(%d): The function '%s' seems not to be used.\n",
+                  tree->lineno, tree->attr.name);
+            tree->isUsed = true;
+            numWarnings++;
+            break;
+
+      }
+
+   }
+}
+
 /*
  * @brief Perform semantic analysis on an AST
  * 
@@ -797,6 +845,8 @@ TreeNode *semanticAnalysis(TreeNode *syntree, SymbolTable *symtabX, int &globalO
    syntree = loadIOLib(syntree);
 
    treeTraverse(syntree, symtabX);
+
+//   symtabX->applyToAll(checkIsUsed);
 
    globalOffset = goffset;
    
