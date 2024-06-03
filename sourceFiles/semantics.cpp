@@ -30,6 +30,7 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab);
 void treeDeclTraverse(TreeNode *current, SymbolTable *symtab);
 void treeTraverse(TreeNode *current, SymbolTable *symtab);
 TreeNode *semanticAnalysis(TreeNode *syntree, SymbolTable *symtabX, int &globalOffset);
+void checkIsUsed(std::string str, void *node);
 
 /*
  * @brief load IO libraries and link them to syntax tree
@@ -486,10 +487,10 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
                // FIX for array not being in symbol table, but the child existing. 
                current->type = current->child[0]->type;
                current->child[0]->isAssigned = true;
-               current->child[0]->isUsed = true;
+//               current->child[0]->isUsed = true;
             } else {
                lookupNode->isAssigned = true;
-               lookupNode->isUsed = true;
+ //              lookupNode->isUsed = true;
                current->type = lookupNode->type;
             }
 
@@ -516,7 +517,6 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
             current->offset = lookupNode->offset;
             current->isUsed = true;
             lookupNode->isUsed = true;
-
             TreeNode *params = current->child[0];
             TreeNode *lookups = lookupNode->child[0];
             TreeNode *tmp;
@@ -690,6 +690,7 @@ void treeDeclTraverse(TreeNode *current, SymbolTable *symtab) {
       case ParamK:
          if (current->child[0] != NULL) {
            current->isAssigned = true; 
+           //current->isUsed = true;
          }
 
          if (insertError(current, symtab)) {
@@ -755,6 +756,8 @@ void treeDeclTraverse(TreeNode *current, SymbolTable *symtab) {
          treeTraverse(current->child[2], symtab);
 
          current->varKind = Global;
+
+         symtab->applyToAll(checkIsUsed);
 
          symtab->leave();
 
