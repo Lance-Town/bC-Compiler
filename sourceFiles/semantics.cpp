@@ -113,20 +113,31 @@ TreeNode *loadIOLib(TreeNode *syntree) {
  */
 void handleOpErrors(TreeNode *current, SymbolTable *symtab) {
    int op = current->attr.op;
-   TreeNode *lhs = (TreeNode *)symtab->lookup(current->child[0]->attr.name);
-   TreeNode *rhs = (TreeNode *)symtab->lookup(current->child[1]->attr.name);
+   TreeNode *lhs = NULL, *rhs = NULL; 
 
-   if (lhs == NULL) {
+   if (current->child[0] == NULL) {
+      printf("SYNTAX ERROR(%d): child 0 cannot be NULL\n", current->lineno);
+      numErrors++;
+      return;
+   } else {
+      lhs = (TreeNode *)symtab->lookup(current->child[0]->attr.name);
+   }
+
+   if (current->child[1] != NULL) {
+      rhs = (TreeNode *)symtab->lookup(current->child[1]->attr.name);
+   }
+
+   if (current->child[0] != NULL && lhs == NULL) {
       lhs = current->child[0];
    }
-   if (rhs == NULL) {
+   if (current->child[1] != NULL && rhs == NULL) {
       rhs = current->child[1];
    }
 
 
    if (op == '/' || op == '-' || op == '*' || op == '+' || op == '%' || op == MIN
          || op == MAX || op == ADDASS || op == SUBASS || op == MULASS
-         || op == DIVASS || (op == '<' && (current->type == Integer))) {
+         || op == DIVASS) {
             
       if (lhs->type != Integer) {
          printf("SEMANTIC ERROR(%d): '%s' requires operands of type int but lhs is of %s.\n",
@@ -163,12 +174,41 @@ void handleOpErrors(TreeNode *current, SymbolTable *symtab) {
             current->lineno, largerTokens[op]);
          numErrors++;
       }
-   } else if (op == '=' || op == EQ || op == NEQ) {
+   } else if (op == '=' || op == EQ || op == NEQ || op == '>' || op == GEQ || op == '<' || op == LEQ) {
+      
       if (lhs->type != rhs->type) {
          printf("SEMANTIC ERROR(%d): '%s' requires operands of the same type but lhs is %s and rhs is %s.\n",
                current->lineno, largerTokens[op], expToStr(lhs->type, false, false), expToStr(rhs->type, false, false));
          numErrors++;
       }
+
+      if (op == '=' && lhs->attr.op != '[') {
+         if (lhs->isArray && !rhs->isArray) {
+            printf("SEMANTIC ERROR(%d): '=' requires both operands be arrays or not but lhs is an array and rhs is not an array.\n", current->lineno);
+            numErrors++;
+         } else if (!lhs->isArray && rhs->isArray) {
+            printf("SEMANTIC ERROR(%d): '=' requires both operands be arrays or not but lhs is not an array and rhs is an array.\n", current->lineno);
+            numErrors++;
+         }
+      } 
+   } 
+   
+   else if (op == SIZEOF) {
+     if (!lhs->isArray) {
+        printf("SEMANTIC ERROR(%d): The operation 'sizeof' only works with arrays.\n", current->lineno);
+        numErrors++;
+     } 
+   } else if (op == '?' || op == CHSIGN || op == INC || op == DEC) {
+      if (lhs->type != Integer) {
+         printf("SEMANTIC ERROR(%d): Unary '%s' requires an operand of type int but was given %s.\n", 
+               current->lineno, largerTokens[op], expToStr(lhs->type, false, false));
+         numErrors++;
+      }
+
+      if (lhs->isArray) {
+         printf("SEMANTIC ERROR(%d): The operation '%s' does not work with arrays.\n", current->lineno, largerTokens[op]);
+        numErrors++;
+      } 
    }
 
    return;
