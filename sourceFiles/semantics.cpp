@@ -19,6 +19,7 @@ static int newScope = 0;
 static TreeNode *funcInside = NULL; // store which function the children are currently inside
 
 extern int numErrors;
+extern char *largerTokens[LASTTERM+1];
 
 void treeTraverse(TreeNode *current, SymbolTable *symtab);
 TreeNode *loadIOLib(TreeNode *syntree);
@@ -28,7 +29,6 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab);
 void treeDeclTraverse(TreeNode *current, SymbolTable *symtab);
 void treeTraverse(TreeNode *current, SymbolTable *symtab);
 TreeNode *semanticAnalysis(TreeNode *syntree, SymbolTable *symtabX, int &globalOffset);
-
 
 /*
  * @brief load IO libraries and link them to syntax tree
@@ -105,6 +105,73 @@ TreeNode *loadIOLib(TreeNode *syntree) {
    outnl->sibling = syntree; // add in the tree we are given
    
    return input;
+}
+
+/*
+ * @brief handle error conditions for operators and assignments
+ * not having the correct lhs and rhs types
+ */
+void handleOpErrors(TreeNode *current, SymbolTable *symtab) {
+   int op = current->attr.op;
+   TreeNode *lhs = (TreeNode *)symtab->lookup(current->child[0]->attr.name);
+   TreeNode *rhs = (TreeNode *)symtab->lookup(current->child[1]->attr.name);
+
+   if (lhs == NULL) {
+      lhs = current->child[0];
+   }
+   if (rhs == NULL) {
+      rhs = current->child[1];
+   }
+
+
+   if (op == '/' || op == '-' || op == '*' || op == '+' || op == '%' || op == MIN
+         || op == MAX || op == ADDASS || op == SUBASS || op == MULASS
+         || op == DIVASS || (op == '<' && (current->type == Integer))) {
+            
+      if (lhs->type != Integer) {
+         printf("SEMANTIC ERROR(%d): '%s' requires operands of type int but lhs is of %s.\n",
+               current->lineno, largerTokens[op], expToStr(lhs->type, false, false));
+         numErrors++;
+      }
+
+      if (rhs->type != Integer) {
+         printf("SEMANTIC ERROR(%d): '%s' requires operands of type int but rhs is of %s.\n",
+               current->lineno, largerTokens[op], expToStr(rhs->type, false, false));
+         numErrors++;
+      }
+
+      if (lhs->isArray || rhs->isArray) {
+         printf("SEMANTIC ERROR(%d): The operation '%s' does not work with arrays.\n", 
+            current->lineno, largerTokens[op]);
+         numErrors++;
+      }
+   } else if (op == AND || op == OR) {
+      if (lhs->type != Boolean) {
+         printf("SEMANTIC ERROR(%d): '%s' requires operands of type bool but lhs is of %s.\n",
+               current->lineno, largerTokens[op], expToStr(lhs->type, false, false));
+         numErrors++;
+      }
+
+      if (rhs->type != Boolean) {
+         printf("SEMANTIC ERROR(%d): '%s' requires operands of type bool but rhs is of %s.\n",
+               current->lineno, largerTokens[op], expToStr(rhs->type, false, false));
+         numErrors++;
+      }
+
+      if (lhs->isArray || rhs->isArray) {
+         printf("SEMANTIC ERROR(%d): The operation '%s' does not work with arrays.\n", 
+            current->lineno, largerTokens[op]);
+         numErrors++;
+      }
+   } else if (op == '=' || op == EQ || op == NEQ) {
+      if (lhs->type != rhs->type) {
+         printf("SEMANTIC ERROR(%d): '%s' requires operands of the same type but lhs is %s and rhs is %s.\n",
+               current->lineno, largerTokens[op], expToStr(lhs->type, false, false), expToStr(rhs->type, false, false));
+         numErrors++;
+      }
+   }
+
+   return;
 }
 
 /*
@@ -311,6 +378,8 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
          
          treeTraverse(current->child[0], symtab);
 
+         handleOpErrors(current, symtab);
+
          if (current->child[0] == NULL) {
             //printf("ERROR: left child has no type - semantics.cpp::treeExpTraverse()\t%s\n", current->attr.name);
          } else {
@@ -338,7 +407,8 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
          treeTraverse(current->child[0], symtab);
          lookupNode = (TreeNode *) symtab->lookup(current->attr.name);
          if (lookupNode == NULL) {
-
+            printf("SEMANTIC ERROR(%d): Symbol '%s' is not declared.\n", current->lineno, current->attr.name);
+            numErrors++;
          } else {
             current->type = lookupNode->type;
             //current->size = lookupNode->size;
@@ -389,11 +459,14 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
          int op = current->attr.op;
          treeTraverse(current->child[0], symtab);
 
+         handleOpErrors(current, symtab);
+
          if (op == EQ || op == NEQ || op == LEQ || op == GEQ || op == '<' || op == '>') {
             current->type = Boolean;
          } else if (op == SIZEOF) {
             current->type = Integer;
          } else {
+
             if (current->child[0] == NULL) {
                printf("ERROR: Op child can not be NULL - semantics.cpp::treeExpTraverse\n");
             } else {
@@ -409,6 +482,7 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
          if (op == '[') {
             current->isArray = true;
          }
+
 
          treeTraverse(current->child[1], symtab);
          treeTraverse(current->child[2], symtab);
