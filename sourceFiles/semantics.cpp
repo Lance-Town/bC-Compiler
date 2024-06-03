@@ -762,7 +762,7 @@ void treeDeclTraverse(TreeNode *current, SymbolTable *symtab) {
 
          symtab->applyToAll(checkIsUsed);
 
-         if (newScope == 0  && (current->lineno != -1) && !foundReturn && current->type != Void) {
+         if (   (current->lineno != -1) && !foundReturn && current->type != Void) {
             printf("SEMANTIC WARNING(%d): Expecting to return %s but function '%s' has no return statement.\n",
                   current->lineno, expToStr(current->type, false, false), current->attr.name);
             numWarnings++;
