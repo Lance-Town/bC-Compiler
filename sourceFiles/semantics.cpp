@@ -235,6 +235,21 @@ void handleOpErrors(TreeNode *current, SymbolTable *symtab) {
 }
 
 /*
+ * @brief Count number of siblings a node has
+ */
+int countSiblings(TreeNode *current) {
+   int count = 0;
+   TreeNode *tmp = current;
+
+   while (tmp) {
+      count++;
+      tmp = tmp->sibling;
+   }
+
+   return count;
+}
+
+/*
  * @brief Attempt to insert a node into the
  * symbol table
  * 
@@ -429,29 +444,6 @@ void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
 
          }
 
-         /*
-         if (current->child[0] != NULL) {
-            if (current->child[0]->type != Integer) {
-            }
-         }
-         if (current->child[1] != NULL) {
-            if (current->child[1]->type != Integer) {
-               printf("SEMANTIC ERROR(%d): Expecting type int in position 2 in range of for statement but got %s.\n",
-                     current->lineno, expToStr(current->child[1]->type, false, false));
-               numErrors++;
-            }
-         }
-
-         if (current->child[2] != NULL) {
-            if (current->child[2]->type != Integer) {
-               printf("SEMANTIC ERROR(%d): Expecting type int in position 3 in range of for statement but got %s.\n",
-                     current->lineno, expToStr(current->child[2]->type, false, false));
-               numErrors++;
-            }
-
-         }
-         */
-         
          treeTraverse(current->child[0], symtab);
          treeTraverse(current->child[1], symtab);
          treeTraverse(current->child[2], symtab);
@@ -511,6 +503,7 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
       case CallK:
          treeTraverse(current->child[0], symtab);
          lookupNode = (TreeNode *) symtab->lookup(current->attr.name);
+
          if (lookupNode == NULL) {
             printf("SEMANTIC ERROR(%d): Symbol '%s' is not declared.\n", current->lineno, current->attr.name);
             current->type = UndefinedType;
@@ -519,9 +512,52 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
             current->type = lookupNode->type;
             //current->size = lookupNode->size;
             current->offset = lookupNode->offset;
+            current->isUsed = true;
+
+            TreeNode *params = current->child[0];
+            TreeNode *lookups = lookupNode->child[0];
+            TreeNode *tmp;
+            int i = 1;
+
+            while (params && lookups) {
+               tmp = params->sibling;
+               params->sibling = NULL;
+               treeTraverse(params, symtab);
+
+               params->sibling = tmp;
+
+               if (params->type != lookups->type) {
+                  printf("SEMANTIC ERROR(%d): Expecting %s in parameter %d of call to '%s' declared on line %d but got %s.\n",
+                     current->lineno, expToStr(lookups->type, false, false), i, lookupNode->attr.name, lookupNode->lineno,
+                     expToStr(params->type, false, false));
+                  numErrors++;
+               }
+               if (lookups->isArray && !params->isArray) {
+                  printf("SEMANTIC ERROR(%d): Expecting array in parameter %d of call to '%s' declared on line %d.\n",
+                        current->lineno, i, lookupNode->attr.name, lookupNode->lineno);
+                  numErrors++;
+               } else if (!lookups->isArray && params->isArray) {
+                  printf("SEMANTIC ERROR(%d): Not expecting array in parameter %d of call to '%s' declared on line %d.\n",
+                        current->lineno, i, lookupNode->attr.name, lookupNode->lineno);
+                  numErrors++;
+               }
+
+               params = params->sibling;
+               lookups = lookups->sibling;
+               i++;
+            }
+
+            if (params && !lookups) {
+               printf("SEMANTIC ERROR(%d): Too many parameters passed for function '%s' declared on line %d.\n",
+                  current->lineno, current->attr.name, lookupNode->lineno);
+               numErrors++;
+            } else if (!params && lookups) {
+               printf("SEMANTIC ERROR(%d): Too few parameters passed for function '%s' declared on line %d.\n",
+                  current->lineno, current->attr.name, lookupNode->lineno);
+               numErrors++;
+            }
          }
-         treeTraverse(current->child[1], symtab);
-         treeTraverse(current->child[2], symtab);
+
          break;
 
       case ConstantK:
