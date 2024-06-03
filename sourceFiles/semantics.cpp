@@ -182,18 +182,18 @@ void handleOpErrors(TreeNode *current, SymbolTable *symtab) {
          numErrors++;
       }
 
-      if (op == '=' && lhs->attr.op != '[') {
+      if (lhs->attr.op != '[') {
          if (lhs->isArray && !rhs->isArray) {
-            printf("SEMANTIC ERROR(%d): '=' requires both operands be arrays or not but lhs is an array and rhs is not an array.\n", current->lineno);
+            printf("SEMANTIC ERROR(%d): '%s' requires both operands be arrays or not but lhs is an array and rhs is not an array.\n", 
+                  current->lineno, largerTokens[op]);
             numErrors++;
          } else if (!lhs->isArray && rhs->isArray) {
-            printf("SEMANTIC ERROR(%d): '=' requires both operands be arrays or not but lhs is not an array and rhs is an array.\n", current->lineno);
+            printf("SEMANTIC ERROR(%d): '%s' requires both operands be arrays or not but lhs is not an array and rhs is an array.\n",
+                  current->lineno, largerTokens[op]);
             numErrors++;
          }
       } 
-   } 
-   
-   else if (op == SIZEOF) {
+   } else if (op == SIZEOF) {
      if (!lhs->isArray) {
         printf("SEMANTIC ERROR(%d): The operation 'sizeof' only works with arrays.\n", current->lineno);
         numErrors++;
@@ -209,7 +209,21 @@ void handleOpErrors(TreeNode *current, SymbolTable *symtab) {
          printf("SEMANTIC ERROR(%d): The operation '%s' does not work with arrays.\n", current->lineno, largerTokens[op]);
         numErrors++;
       } 
+   } else if (op == '[') {
+      if (!lhs->isArray) {
+         printf("SEMANTIC ERROR(%d): Cannot index nonarray '%s'.\n", current->lineno, lhs->attr.name);
+         numErrors++;
+      }
+      if (rhs->type != Integer) {
+         printf("SEMANTIC ERROR(%d): Array '%s' should be indexed by type int but got %s.\n", current->lineno, lhs->attr.name, expToStr(rhs->type, false, false));
+         numErrors++;
+      }
+      if (rhs->isArray) {
+         printf("SEMANTIC ERROR(%d): Array index is the unindexed array '%s'.\n", current->lineno, rhs->attr.name);
+         numErrors++;
+      }
    }
+
 
    return;
 }
