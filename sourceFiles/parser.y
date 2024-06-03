@@ -137,6 +137,8 @@ parms      : parmList {$$ = $1;}
 
 parmList   : parmList ';' parmTypeList              { $$ = addSibling($1, $3); }
            | parmTypeList { $$ = $1; }
+           | parmList ';' error                     { $$ = NULL; }
+           | error                                  { $$ = NULL; }
            ;
 
 parmTypeList : typeSpec parmIdList                  { setType($1, $2, false); $$ = $2; }
@@ -337,6 +339,7 @@ int main(int argc, char **argv) {
 
    if (numErrors == 0) {
       syntaxTree = semanticAnalysis(syntaxTree, symtab, globalOffset);
+      //printTree(stdout, syntaxTree, false, false);
    }
 
    if (numErrors == 0) {
@@ -349,7 +352,7 @@ int main(int argc, char **argv) {
    }
 
    if (numErrors == 0) {
-      codegen(stdout, argv[1], syntaxTree, symtab, globalOffset, false);
+//      codegen(stdout, argv[1], syntaxTree, symtab, globalOffset, false);
    }
 
    printf("Number of warnings: %d\n", numWarnings);
