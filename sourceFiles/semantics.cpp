@@ -507,6 +507,8 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
          break;
 
       case CallK:
+
+
          treeTraverse(current->child[0], symtab);
          lookupNode = (TreeNode *) symtab->lookup(current->attr.name);
 
@@ -515,6 +517,14 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
             current->type = UndefinedType;
             numErrors++;
          } else {
+
+
+         if (lookupNode->kind.decl != FuncK) {
+            printf("SEMANTIC ERROR(%d): '%s' is a simple variable and cannot be called.\n",
+                  current->lineno, current->attr.name);
+            numErrors++;
+         }
+
             current->type = lookupNode->type;
             //current->size = lookupNode->size;
             current->offset = lookupNode->offset;
@@ -762,7 +772,7 @@ void treeDeclTraverse(TreeNode *current, SymbolTable *symtab) {
 
          symtab->applyToAll(checkIsUsed);
 
-         if (   (current->lineno != -1) && !foundReturn && current->type != Void) {
+         if ((current->lineno != -1) && !foundReturn && current->type != Void) {
             printf("SEMANTIC WARNING(%d): Expecting to return %s but function '%s' has no return statement.\n",
                   current->lineno, expToStr(current->type, false, false), current->attr.name);
             numWarnings++;
