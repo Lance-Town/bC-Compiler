@@ -22,6 +22,7 @@ using namespace std;
 extern "C" int yylex();
 extern "C" int yyparse();
 extern "C" FILE *yyin;
+extern "C" int tokenErrors;
 
 void printToken(TokenData myData, string tokenName, int type = 0) {
    cout << "Line: " << myData.linenum << " Type: " << tokenName;
@@ -340,6 +341,7 @@ int main(int argc, char **argv) {
    if (numErrors == 0) {
       syntaxTree = semanticAnalysis(syntaxTree, symtab, globalOffset);
       //printTree(stdout, syntaxTree, false, false);
+   
    }
 
    if (numErrors == 0) {
@@ -356,7 +358,7 @@ int main(int argc, char **argv) {
    }
 
    printf("Number of warnings: %d\n", numWarnings);
-   printf("Number of errors: %d\n", numErrors);
+   printf("Number of errors: %d\n", numErrors + tokenErrors);
 
    return 0;
 }

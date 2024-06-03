@@ -18,6 +18,7 @@ using namespace std;
 #define YYSTYPE int
 
 int line=1;
+int tokenErrors = 0;
 char *lastToken=(char *)"";
 extern int numErrors;
 
@@ -167,6 +168,6 @@ op [\;\{\}\(\)\<\>\=\,\:\-\+\?\*\/\%\\]
 {whitespace}+   ;
 
    /* Errors */
-.               { printf("ERROR(%d): Token error, invalid or misplaced input character: \'%c\'. Character Ignored.\n", line, yytext[0]);}
+.               { printf("TOKEN ERROR(%d): invalid or misplaced input character: \'%c\'. Character Ignored.\n", line, yytext[0]); tokenErrors++;}
 
 
