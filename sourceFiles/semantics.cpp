@@ -16,6 +16,7 @@ static int goffset = 0;
 static int foffset = 0;
 static int varCounter = 0;
 static int newScope = 0;
+static bool foundReturn = false;
 static TreeNode *funcInside = NULL; // store which function the children are currently inside
 
 extern int numErrors;
@@ -383,6 +384,8 @@ void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
          break;
 
       case ReturnK:
+
+         foundReturn = true;
 
          treeTraverse(current->child[0], symtab);
          treeTraverse(current->child[1], symtab);
@@ -759,7 +762,16 @@ void treeDeclTraverse(TreeNode *current, SymbolTable *symtab) {
 
          symtab->applyToAll(checkIsUsed);
 
+         if (newScope == 0  && (current->lineno != -1) && !foundReturn && current->type != Void) {
+            printf("SEMANTIC WARNING(%d): Expecting to return %s but function '%s' has no return statement.\n",
+                  current->lineno, expToStr(current->type, false, false), current->attr.name);
+            numWarnings++;
+         }
+
+
          symtab->leave();
+
+         foundReturn = false;
 
          break;
    }
