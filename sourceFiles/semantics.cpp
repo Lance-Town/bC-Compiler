@@ -515,6 +515,7 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
             //current->size = lookupNode->size;
             current->offset = lookupNode->offset;
             current->isUsed = true;
+            lookupNode->isUsed = true;
 
             TreeNode *params = current->child[0];
             TreeNode *lookups = lookupNode->child[0];
@@ -846,7 +847,7 @@ TreeNode *semanticAnalysis(TreeNode *syntree, SymbolTable *symtabX, int &globalO
 
    treeTraverse(syntree, symtabX);
 
-//   symtabX->applyToAll(checkIsUsed);
+   symtabX->applyToAll(checkIsUsed);
 
    globalOffset = goffset;
    
