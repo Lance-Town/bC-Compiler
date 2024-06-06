@@ -168,6 +168,6 @@ op [\;\{\}\(\)\<\>\=\,\:\-\+\?\*\/\%\\]
 {whitespace}+   ;
 
    /* Errors */
-.               { printf("TOKEN ERROR(%d): invalid or misplaced input character: \'%c\'. Character Ignored.\n", line, yytext[0]); tokenErrors++;}
+.               { printf("TOKEN ERROR(%d): invalid or misplaced input character: \'%c\'. Character Ignored.\n", line, yytext[0]); numErrors++;}
 
 

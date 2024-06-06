@@ -125,7 +125,11 @@ void handleOpErrors(TreeNode *current, SymbolTable *symtab) {
       numErrors++;
       return;
    } else {
-      lhs = (TreeNode *)symtab->lookup(current->child[0]->attr.name);
+      if (current->child[0]->attr.op == '[') {
+         lhs = current->child[0];
+      } else {
+         lhs = (TreeNode *)symtab->lookup(current->child[0]->attr.name);
+      }
    }
 
    if (current->child[1] != NULL) {
@@ -139,7 +143,7 @@ void handleOpErrors(TreeNode *current, SymbolTable *symtab) {
       rhs = current->child[1];
    }
 
-   if (lhs->type == UndefinedType) {
+   if (lhs->type == UndefinedType && !lhs->isArray) {
       return;
    }
 
@@ -160,7 +164,7 @@ void handleOpErrors(TreeNode *current, SymbolTable *symtab) {
          numErrors++;
       }
 
-      if (lhs->isArray || rhs->isArray) {
+     if ((lhs->isArray && lhs->attr.op != '[') || (rhs->isArray && rhs->attr.op != '[')) { 
          printf("SEMANTIC ERROR(%d): The operation '%s' does not work with arrays.\n", 
             current->lineno, largerTokens[op]);
          numErrors++;
@@ -178,7 +182,7 @@ void handleOpErrors(TreeNode *current, SymbolTable *symtab) {
          numErrors++;
       }
 
-      if (lhs->isArray || rhs->isArray) {
+      if ((lhs->isArray && lhs->attr.op != '[') || (rhs->isArray && rhs->attr.op != '[')) {
          printf("SEMANTIC ERROR(%d): The operation '%s' does not work with arrays.\n", 
             current->lineno, largerTokens[op]);
          numErrors++;
@@ -190,17 +194,15 @@ void handleOpErrors(TreeNode *current, SymbolTable *symtab) {
          numErrors++;
       }
 
-      if (lhs->attr.op != '[') {
-         if (lhs->isArray && !rhs->isArray) {
-            printf("SEMANTIC ERROR(%d): '%s' requires both operands be arrays or not but lhs is an array and rhs is not an array.\n", 
-                  current->lineno, largerTokens[op]);
-            numErrors++;
-         } else if (!lhs->isArray && rhs->isArray) {
-            printf("SEMANTIC ERROR(%d): '%s' requires both operands be arrays or not but lhs is not an array and rhs is an array.\n",
-                  current->lineno, largerTokens[op]);
-            numErrors++;
-         }
-      } 
+      if (lhs->isArray && !rhs->isArray && lhs->attr.op != '[' ) {
+         printf("SEMANTIC ERROR(%d): '%s' requires both operands be arrays or not but lhs is an array and rhs is not an array.\n", 
+               current->lineno, largerTokens[op]);
+         numErrors++;
+      } else if (!lhs->isArray && rhs->isArray && rhs->attr.op != '[') {
+         printf("SEMANTIC ERROR(%d): '%s' requires both operands be arrays or not but lhs is not an array and rhs is an array.\n",
+               current->lineno, largerTokens[op]);
+         numErrors++;
+      }
    } else if (op == SIZEOF) {
      if (!lhs->isArray) {
         printf("SEMANTIC ERROR(%d): The operation 'sizeof' only works with arrays.\n", current->lineno);
@@ -213,16 +215,16 @@ void handleOpErrors(TreeNode *current, SymbolTable *symtab) {
          numErrors++;
       }
 
-      if (lhs->isArray) {
+      if (lhs->isArray && lhs->attr.op != '[') {
          printf("SEMANTIC ERROR(%d): The operation '%s' does not work with arrays.\n", current->lineno, largerTokens[op]);
         numErrors++;
       } 
    } else if (op == '[') {
-      if (!lhs->isArray) {
+      if (!lhs->isArray || lhs->type == UndefinedType) {
          printf("SEMANTIC ERROR(%d): Cannot index nonarray '%s'.\n", current->lineno, lhs->attr.name);
          numErrors++;
       }
-      if (rhs->type != Integer) {
+      else if (rhs->type != Integer) {
          printf("SEMANTIC ERROR(%d): Array '%s' should be indexed by type int but got %s.\n", current->lineno, lhs->attr.name, expToStr(rhs->type, false, false));
          numErrors++;
       }
@@ -289,19 +291,30 @@ void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
          if (newScope) {   
             symtab->enter((char *)"IfStmt");
             remOffset = foffset;
-            if (current->child[0] && current->child[0]->type != Boolean) {
-               printf("SEMANTIC ERROR(%d): Expecting Boolean test condition in if statement but got %s.\n", current->lineno, expToStr(current->child[0]->type, false, false));
+            treeTraverse(current->child[0], symtab);
+
+            if (current->child[0]) {
+               lookupNode = (TreeNode *)symtab->lookup(current->child[0]->attr.name);
+            }
+   
+            if (lookupNode == NULL) {
+               lookupNode = current->child[0];
+            }
+
+            if (lookupNode != NULL && lookupNode->type != Boolean && lookupNode->type != UndefinedType) {
+               printf("SEMANTIC ERROR(%d): Expecting Boolean test condition in if statement but got %s.\n", current->lineno, expToStr(lookupNode->type, false, false));
                numErrors++;
             }
 
-            if (current->child[0] && current->child[0]->isArray) {
+            if (lookupNode != NULL && lookupNode->isArray) {
                printf("SEMANTIC ERROR(%d): Cannot use array as test condition in if statement.\n", current->lineno);
                numErrors++;
             }
-            treeTraverse(current->child[0], symtab);
+
             current->size = foffset;
             treeTraverse(current->child[1], symtab);
             treeTraverse(current->child[2], symtab);
+
             foffset = remOffset;
             symtab->leave();
          } else {
@@ -317,7 +330,9 @@ void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
          if (newScope) {   
             symtab->enter((char *)"WhileStmt");
             remOffset = foffset;
-            if (current->child[0] && current->child[0]->type != Boolean) {
+            treeTraverse(current->child[0], symtab);
+            if (current->child[0] && current->child[0]->type != Boolean && current->child[0]->type != UndefinedType) {
+               // Suppress UndefinedType error, shows up elsewhere
                printf("SEMANTIC ERROR(%d): Expecting Boolean test condition in while statement but got %s.\n", current->lineno, expToStr(current->child[0]->type, false, false));
                numErrors++;
             }
@@ -326,7 +341,6 @@ void treeStmtTraverse(TreeNode *current, SymbolTable *symtab) {
                printf("SEMANTIC ERROR(%d): Cannot use array as test condition in while statement.\n", current->lineno);
                numErrors++;
             }
-            treeTraverse(current->child[0], symtab);
             current->size = foffset;
             treeTraverse(current->child[1], symtab);
             treeTraverse(current->child[2], symtab);
@@ -472,11 +486,6 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
 
    switch(current->kind.exp) {
       case AssignK:
-         
-
-         if (current->attr.op == '=') {
-//            current->isAssigned = true;
-         }
 
          if (current->child[0] == NULL) {
             //printf("ERROR: left child has no type - semantics.cpp::treeExpTraverse()\t%s\n", current->attr.name);
@@ -500,15 +509,13 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
          }
 
          treeTraverse(current->child[0], symtab);
-         handleOpErrors(current, symtab);
          treeTraverse(current->child[1], symtab);
          treeTraverse(current->child[2], symtab);
+         handleOpErrors(current, symtab);
 
          break;
 
       case CallK:
-
-
          treeTraverse(current->child[0], symtab);
          lookupNode = (TreeNode *) symtab->lookup(current->attr.name);
 
@@ -517,13 +524,11 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
             current->type = UndefinedType;
             numErrors++;
          } else {
-
-
-         if (lookupNode->kind.decl != FuncK) {
-            printf("SEMANTIC ERROR(%d): '%s' is a simple variable and cannot be called.\n",
-                  current->lineno, current->attr.name);
-            numErrors++;
-         }
+            if (lookupNode->kind.decl != FuncK) {
+               printf("SEMANTIC ERROR(%d): '%s' is a simple variable and cannot be called.\n",
+                     current->lineno, current->attr.name);
+               numErrors++;
+            }
 
             current->type = lookupNode->type;
             //current->size = lookupNode->size;
@@ -552,7 +557,7 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
                   printf("SEMANTIC ERROR(%d): Expecting array in parameter %d of call to '%s' declared on line %d.\n",
                         current->lineno, i, lookupNode->attr.name, lookupNode->lineno);
                   numErrors++;
-               } else if (!lookups->isArray && params->isArray) {
+               } else if (!lookups->isArray && params->isArray && params->attr.op != '[') {
                   printf("SEMANTIC ERROR(%d): Not expecting array in parameter %d of call to '%s' declared on line %d.\n",
                         current->lineno, i, lookupNode->attr.name, lookupNode->lineno);
                   numErrors++;
@@ -586,10 +591,41 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
          break;
 
       case IdK:
-         treeTraverse(current->child[0], symtab);
-
          lookupNode = (TreeNode *)symtab->lookup(current->attr.name);
 
+         if (lookupNode == NULL) {
+            printf("SEMANTIC ERROR(%d): Symbol '%s' is not declared.\n", current->lineno, current->attr.name);
+            current->type = UndefinedType;
+            numErrors++;
+         }
+
+         treeTraverse(current->child[0], symtab);
+         treeTraverse(current->child[1], symtab);
+         treeTraverse(current->child[2], symtab);
+
+         if (lookupNode != NULL) {
+            if (lookupNode->kind.decl == FuncK) {
+               printf("SEMANTIC ERROR(%d): Cannot use function '%s' as a variable.\n", current->lineno, lookupNode->attr.name);
+               numErrors++;
+            }
+
+            current->offset = lookupNode->offset;
+            current->type = lookupNode->type;
+            current->size = lookupNode->size;
+            current->varKind = lookupNode->varKind;
+            current->isArray = lookupNode->isArray;
+            current->isStatic = lookupNode->isStatic;
+            current->isUsed = true;
+            lookupNode->isUsed = true;
+
+            if (!lookupNode->isAssigned && !lookupNode->isArray && lookupNode->kind.decl == VarK) {
+               printf("SEMANTIC WARNING(%d): Variable '%s' may be uninitialized when used here.\n", current->lineno, lookupNode->attr.name);
+               lookupNode->isAssigned = true;
+               numWarnings++;
+            }
+         }
+
+         /*
          if (lookupNode != NULL) {
             if (lookupNode->kind.decl == FuncK) {
                printf("SEMANTIC ERROR(%d): Cannot use function '%s' as a variable.\n", current->lineno, lookupNode->attr.name);
@@ -616,18 +652,17 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
             numErrors++;
            
          }
+         */
 
-         treeTraverse(current->child[1], symtab);
-         treeTraverse(current->child[2], symtab);
 
          break;
 
       case OpK:
          int op = current->attr.op;
+
          treeTraverse(current->child[0], symtab);
-
-         handleOpErrors(current, symtab);
-
+         treeTraverse(current->child[1], symtab);
+         treeTraverse(current->child[2], symtab);
          if (op == EQ || op == NEQ || op == LEQ || op == GEQ || op == '<' || op == '>') {
             current->type = Boolean;
          } else if (op == SIZEOF) {
@@ -650,9 +685,7 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
             current->isArray = true;
          }
 
-
-         treeTraverse(current->child[1], symtab);
-         treeTraverse(current->child[2], symtab);
+         handleOpErrors(current, symtab);
          break;
    }
 
@@ -873,6 +906,13 @@ TreeNode *semanticAnalysis(TreeNode *syntree, SymbolTable *symtabX, int &globalO
    treeTraverse(syntree, symtabX);
 
    symtabX->applyToAll(checkIsUsed);
+
+   TreeNode *lookupNode = (TreeNode *)symtabX->lookup("main");
+
+   if (lookupNode == NULL || lookupNode->kind.decl != FuncK) {
+      printf("LINKER ERROR: A function named 'main' with no parameters must be defined.\n");
+      numErrors++;
+   } 
 
    globalOffset = goffset;
    

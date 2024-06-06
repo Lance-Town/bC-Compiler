@@ -91,6 +91,7 @@ program    : precomList declList                    { syntaxTree = $2; }
 precomList : precomList PRECOMPILER                   { $$ = NULL; printf("%s\n", yylval.tinfo->tokenstr); }
            | PRECOMPILER                                 { $$ = NULL; printf("%s\n", yylval.tinfo->tokenstr);}
            | /* empty */                                 {  $$ = NULL;  }
+           | error                                    { $$ = NULL; yyerrok; }
            ;
 
 declList   : declList decl                          { $$ = addSibling($1, $2);  }
@@ -102,6 +103,8 @@ decl       : varDecl { $$ = $1; }
            ;
 
 varDecl    : typeSpec varDeclList ';'               { setType($1, $2, false); $$ = $2; yyerrok;  }
+           | error varDeclList ';'                  { $$ = NULL; yyerrok; }
+           | typeSpec error ';'                         { $$ = NULL; yyerrok; }
            ;
 
 
@@ -115,6 +118,7 @@ varDeclList  : varDeclList ',' varDeclInit           { $$ = addSibling($1, $3); 
 
 varDeclInit  : varDeclId                             { $$ = $1; }
              | varDeclId ':' simpleExp               { $$ = $1; if ($$ != NULL) $$->child[0] = $3; }
+             | error ':' simpleExp                   { $$ = NULL; yyerrok; }
              ;
 
 varDeclId   : ID                                     { $$ = newDeclNode(VarK, UndefinedType, $1); }
@@ -130,6 +134,7 @@ typeSpec   : INT                                        { $$ = Integer; }
 
 funDecl    : typeSpec ID '(' parms ')' stmt       { $$ = newDeclNode(FuncK, $1, $2, $4, $6); }
            | ID '(' parms ')' stmt                   { $$ = newDeclNode(FuncK, Void, $1, $3, $5); }
+           | ID '(' parms ')' error                   { $$ = NULL; yyerrok; }
            ;
 
 parms      : parmList {$$ = $1;}
@@ -159,6 +164,8 @@ stmt       : matched {$$ = $1; }
 
 
 matched    : IF simpleExp THEN matched ELSE matched   { $$ = newStmtNode(IfK, $1, $2, $4, $6);  }
+           | IF error THEN matched ELSE unmatched      { $$ = NULL; yyerrok; }
+           | IF error THEN matched ELSE matched      { $$ = NULL; yyerrok; }
            | WHILE simpleExp DO matched                  { $$ = newStmtNode(WhileK, $1, $2, $4);  }
            | FOR ID '=' iterRange DO matched             { $$ = newStmtNode(ForK, $1, NULL, $4, $6); $$->child[0] = newDeclNode(VarK, Integer, $2); }
            | expStmt {$$ = $1; }
@@ -169,16 +176,21 @@ matched    : IF simpleExp THEN matched ELSE matched   { $$ = newStmtNode(IfK, $1
 
 iterRange  : simpleExp TO simpleExp                  { $$ = newStmtNode(RangeK, $2, $1, $3); }
            | simpleExp TO simpleExp BY simpleExp    { $$ = newStmtNode(RangeK, $2, $1, $3, $5); }
+           | simpleExp TO simpleExp BY error       { $$ = NULL; yyerrok; }
+           | simpleExp TO error                     { $$ = NULL; yyerrok; }
+           | error BY error                         { $$ = NULL; yyerrok; }
            ;
 
 unmatched  : IF simpleExp THEN stmt                    { $$ = newStmtNode(IfK, $1, $2, $4); }
+           | IF error THEN stmt                        { $$ = NULL; yyerrok; }
            | IF simpleExp THEN matched ELSE unmatched  { $$ = newStmtNode(IfK, $1, $2, $4, $6); }
            | WHILE simpleExp DO unmatched                { $$ = newStmtNode(WhileK, $1, $2, $4); }
            | FOR ID '=' iterRange DO unmatched           { $$ = newStmtNode(ForK, $1, NULL, $4, $6); $$->child[0] = newDeclNode(VarK, Integer, $2); }
            ;
 
-expStmt    : exp ';'
-           | ';'                                        { $$ = NULL; }
+expStmt    : exp ';'                                    { $$ = $1; }
+           | error ';'                                  { $$ = NULL; yyerrok; }
+           | ';'                                        { $$ = NULL; yyerrok; }
            ;
 
 compoundStmt : '{' localDecls stmtList '}'         { $$ = newStmtNode(CompoundK, $1, $2, $3); yyerrok; }
@@ -193,7 +205,7 @@ stmtList   : stmtList stmt                         { $$ = addSibling($1, $2); }
            ;
 
 returnStmt : RETURN ';'                                {  $$ = newStmtNode(ReturnK, $1);}
-           | RETURN exp ';'                           { $$ = newStmtNode(ReturnK, $1, $2); }
+           | RETURN exp ';'                            { $$ = newStmtNode(ReturnK, $1, $2);  }
            ;
 
 breakStmt  : BREAK ';'                                 { $$ = newStmtNode(BreakK, $1); }
@@ -203,6 +215,7 @@ exp        : mutable assignop exp                { $$ = newExpNode(AssignK, $2, 
            | mutable INC                              { $$ = newExpNode(AssignK, $2, $1); }
            | mutable DEC                              { $$ = newExpNode(AssignK, $2, $1); }
            | simpleExp {$$ = $1; }
+           | error assignop exp                         { $$ = NULL; yyerrok; }
            ;
 
 assignop  : '=' {$$ = $1; }
@@ -315,7 +328,7 @@ int main(int argc, char **argv) {
    int option, index;
    char *file = NULL;
    extern FILE *yyin;
-   numErrors = 0, numWarnings = 0;
+//   numErrors = 0, numWarnings = 0;
    SymbolTable *symtab;
    symtab = new SymbolTable();
    symtab->debug(false);
@@ -341,20 +354,10 @@ int main(int argc, char **argv) {
    if (numErrors == 0) {
       syntaxTree = semanticAnalysis(syntaxTree, symtab, globalOffset);
       //printTree(stdout, syntaxTree, false, false);
-   
    }
 
    if (numErrors == 0) {
-      TreeNode *lookupNode = (TreeNode *)symtab->lookup("main");
-
-      if (lookupNode == NULL) {
-         printf("LINKER ERROR: A function named 'main' with no parameters must be defined.\n");
-         numErrors++;
-      }
-   }
-
-   if (numErrors == 0) {
-//      codegen(stdout, argv[1], syntaxTree, symtab, globalOffset, false);
+      codegen(stdout, argv[1], syntaxTree, symtab, globalOffset, false);
    }
 
    printf("Number of warnings: %d\n", numWarnings);
