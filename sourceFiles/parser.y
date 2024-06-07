@@ -91,7 +91,6 @@ program    : precomList declList                    { syntaxTree = $2; }
 precomList : precomList PRECOMPILER                   { $$ = NULL; printf("%s\n", yylval.tinfo->tokenstr); }
            | PRECOMPILER                                 { $$ = NULL; printf("%s\n", yylval.tinfo->tokenstr);}
            | /* empty */                                 {  $$ = NULL;  }
-           | error                                    { $$ = NULL; yyerrok; }
            ;
 
 declList   : declList decl                          { $$ = addSibling($1, $2);  }
@@ -100,9 +99,10 @@ declList   : declList decl                          { $$ = addSibling($1, $2);  
 
 decl       : varDecl { $$ = $1; }
            | funDecl { $$ = $1; }
+           | error   { $$ = NULL; yyerrok; }
            ;
 
-varDecl    : typeSpec varDeclList ';'               { setType($1, $2, false); $$ = $2; yyerrok;  }
+varDecl    : typeSpec varDeclList ';'               { setType($1, $2, false); $$ = $2;  }
            | error varDeclList ';'                  { $$ = NULL; yyerrok; }
            | typeSpec error ';'                         { $$ = NULL; yyerrok; }
            ;
@@ -110,21 +110,28 @@ varDecl    : typeSpec varDeclList ';'               { setType($1, $2, false); $$
 
 scopedVarDecl : STATIC typeSpec varDeclList ';'      { $$ = $3; setType($2, $3, true); }
               | typeSpec varDeclList ';'             { $$ = $2; setType($1, $2, false); }
+              | STATIC typeSpec ';'                  { $$ = NULL; yyerrok; }
+              | typeSpec error ';'                   { $$ = NULL; yyerrok; }
               ;
 
 varDeclList  : varDeclList ',' varDeclInit           { $$ = addSibling($1, $3); }
-             | varDeclInit { $$ = $1;  }
+             | varDeclInit                           { $$ = $1;  }
+             | varDeclList ',' error                 { $$ = NULL; }
+             | error                                 { $$ = NULL; }
              ;
 
 varDeclInit  : varDeclId                             { $$ = $1; }
              | varDeclId ':' simpleExp               { $$ = $1; if ($$ != NULL) $$->child[0] = $3; }
              | error ':' simpleExp                   { $$ = NULL; yyerrok; }
+             | varDeclId ':' error                   { $$ = NULL; yyerrok; }
              ;
 
 varDeclId   : ID                                     { $$ = newDeclNode(VarK, UndefinedType, $1); }
             | ID '[' NUMCONST ']'                    { $$ = newDeclNode(VarK, UndefinedType, $1);
                                                        $$->isArray = true;
                                                        $$->size = 1 + $3->nvalue; }
+            | ID '[' error                           { $$ = NULL; yyerrok; }
+            | error ']'                              { $$ = NULL; yyerrok;  }
             ;
 
 typeSpec   : INT                                        { $$ = Integer; }
@@ -135,6 +142,7 @@ typeSpec   : INT                                        { $$ = Integer; }
 funDecl    : typeSpec ID '(' parms ')' stmt       { $$ = newDeclNode(FuncK, $1, $2, $4, $6); }
            | ID '(' parms ')' stmt                   { $$ = newDeclNode(FuncK, Void, $1, $3, $5); }
            | ID '(' parms ')' error                   { $$ = NULL; yyerrok; }
+           | typeSpec error                   { $$ = NULL; yyerrok; }
            ;
 
 parms      : parmList {$$ = $1;}
@@ -155,7 +163,8 @@ parmIdList   : parmIdList ',' parmId                 { $$ = addSibling($1, $3); 
              ;
 
 parmId     : ID                                          { $$ = newDeclNode(ParamK, UndefinedType, $1); }
-           | ID '[' ']'                                   { $$ = newDeclNode(ParamK, UndefinedType, $1); $$->isArray = true; }
+           | ID '[' ']'                                  { $$ = newDeclNode(ParamK, UndefinedType, $1); $$->isArray = true; }
+           | error ']'                                   { $$ = NULL; yyerrok; } 
            ;
 
 stmt       : matched {$$ = $1; }
@@ -163,9 +172,11 @@ stmt       : matched {$$ = $1; }
            ;
 
 
-matched    : IF simpleExp THEN matched ELSE matched   { $$ = newStmtNode(IfK, $1, $2, $4, $6);  }
-           | IF error THEN matched ELSE unmatched      { $$ = NULL; yyerrok; }
-           | IF error THEN matched ELSE matched      { $$ = NULL; yyerrok; }
+matched    : IF simpleExp THEN matched ELSE matched      { $$ = newStmtNode(IfK, $1, $2, $4, $6);  }
+           | IF error THEN matched ELSE unmatched        { $$ = NULL; yyerrok; }
+           | IF error THEN matched ELSE matched          { $$ = NULL; yyerrok; }
+           | IF error                                    { $$ = NULL; yyerrok; }
+           | IF error ELSE matched                       { $$ = NULL; yyerrok; }
            | WHILE simpleExp DO matched                  { $$ = newStmtNode(WhileK, $1, $2, $4);  }
            | FOR ID '=' iterRange DO matched             { $$ = newStmtNode(ForK, $1, NULL, $4, $6); $$->child[0] = newDeclNode(VarK, Integer, $2); }
            | expStmt {$$ = $1; }
@@ -193,7 +204,7 @@ expStmt    : exp ';'                                    { $$ = $1; }
            | ';'                                        { $$ = NULL; yyerrok; }
            ;
 
-compoundStmt : '{' localDecls stmtList '}'         { $$ = newStmtNode(CompoundK, $1, $2, $3); yyerrok; }
+compoundStmt : '{' localDecls stmtList '}'         { $$ = newStmtNode(CompoundK, $1, $2, $3);  }
              ;
 
 localDecls : localDecls scopedVarDecl              { $$ = addSibling($1, $2);}
@@ -211,11 +222,14 @@ returnStmt : RETURN ';'                                {  $$ = newStmtNode(Retur
 breakStmt  : BREAK ';'                                 { $$ = newStmtNode(BreakK, $1); }
            ;
 
-exp        : mutable assignop exp                { $$ = newExpNode(AssignK, $2, $1, $3); }
-           | mutable INC                              { $$ = newExpNode(AssignK, $2, $1); }
-           | mutable DEC                              { $$ = newExpNode(AssignK, $2, $1); }
-           | simpleExp {$$ = $1; }
+exp        : mutable assignop exp                       { $$ = newExpNode(AssignK, $2, $1, $3); }
+           | mutable INC                                { $$ = newExpNode(AssignK, $2, $1); }
+           | mutable DEC                                { $$ = newExpNode(AssignK, $2, $1); }
+           | simpleExp                                  { $$ = $1; }
            | error assignop exp                         { $$ = NULL; yyerrok; }
+           | mutable assignop error                     { $$ = NULL; yyerrok; }
+           | error INC                                  { $$ = NULL; yyerrok; }
+           | error DEC                                  { $$ = NULL; yyerrok; }
            ;
 
 assignop  : '=' {$$ = $1; }
@@ -226,10 +240,12 @@ assignop  : '=' {$$ = $1; }
           ;
 
 simpleExp  : simpleExp OR andExp                 {  $$ = newExpNode(OpK, $2, $1, $3);}
-           | andExp {$$ = $1; }
+           | simpleExp OR error                  { $$ = NULL; yyerrok; }
+           | andExp                              {$$ = $1; }
            ;
 
 andExp     : andExp AND unaryRelExp              { $$ = newExpNode(OpK, $2, $1, $3); }
+           | andExp AND error                  { $$ = NULL; yyerrok; }
            | unaryRelExp {$$ = $1; }
            ;
 
@@ -258,6 +274,7 @@ minmaxop   : MAX {$$ = $1; }
            ;
 
 sumExp     : sumExp sumop mulExp              { $$ = newExpNode(OpK, $2, $1, $3); }
+           | sumExp sumop error               { $$ = NULL; yyerrok; }
            | mulExp {$$ = $1; }
            ;
 
@@ -266,6 +283,7 @@ sumop      : '+' {$$ = $1; }
            ;
 
 mulExp     : mulExp mulop unaryExp           { $$ = newExpNode(OpK, $2, $1, $3); }
+           | mulExp mulop error               { $$ = NULL; yyerrok; }
            | unaryExp {$$ = $1; }
            ;
 
@@ -275,6 +293,7 @@ mulop      : '*' {$$ = $1;}
            ;
 
 unaryExp   : unaryop unaryExp                   { $$ = newExpNode(OpK, $1, $2); }
+           | unaryop error                      { $$ = NULL; yyerrok; }
            | factor {$$ = $1; }
            ;
 
@@ -296,11 +315,13 @@ mutable    : ID                                       { $$ = newExpNode(IdK, $1)
            ;
 
 immutable  : '(' exp ')'                            { $$ = $2; }
-           | call {$$ = $1; }
-           | constant {$$ = $1; }
+           | call                                   { $$ = $1; }
+           | constant                               { $$ = $1; }
+           | '(' error                              { $$ = NULL; yyerrok; }
            ;
 
 call       : ID '(' args ')'                        { $$ = newExpNode(CallK, $1, $3); }
+           | error '('                              { $$ = NULL; yyerrok; }
            ;
 
 args       : argList {$$ = $1; }
