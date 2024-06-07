@@ -115,8 +115,8 @@ scopedVarDecl : STATIC typeSpec varDeclList ';'      { $$ = $3; setType($2, $3, 
               ;
 
 varDeclList  : varDeclList ',' varDeclInit           { $$ = addSibling($1, $3); }
-             | varDeclInit                           { $$ = $1;  }
              | varDeclList ',' error                 { $$ = NULL; }
+             | varDeclInit                           { $$ = $1;  }
              | error                                 { $$ = NULL; }
              ;
 
@@ -141,8 +141,11 @@ typeSpec   : INT                                        { $$ = Integer; }
 
 funDecl    : typeSpec ID '(' parms ')' stmt       { $$ = newDeclNode(FuncK, $1, $2, $4, $6); }
            | ID '(' parms ')' stmt                   { $$ = newDeclNode(FuncK, Void, $1, $3, $5); }
-           | ID '(' parms ')' error                   { $$ = NULL; yyerrok; }
-           | typeSpec error                   { $$ = NULL; yyerrok; }
+           | typeSpec error                   { $$ = NULL;  }
+           | typeSpec ID '(' error                      { $$ = NULL;  }
+           | typeSpec ID '(' parms ')' error                   { $$ = NULL; }
+           | ID '(' error                               { $$ = NULL;  }
+           | ID '(' parms ')' error                   { $$ = NULL;  }
            ;
 
 parms      : parmList {$$ = $1;}
@@ -150,16 +153,18 @@ parms      : parmList {$$ = $1;}
            ;
 
 parmList   : parmList ';' parmTypeList              { $$ = addSibling($1, $3); }
-           | parmTypeList { $$ = $1; }
+           | parmTypeList                           { $$ = $1; }
            | parmList ';' error                     { $$ = NULL; }
            | error                                  { $$ = NULL; }
            ;
 
 parmTypeList : typeSpec parmIdList                  { setType($1, $2, false); $$ = $2; }
+             | typeSpec error                       { $$ = NULL; yyerrok; }
              ;
 
 parmIdList   : parmIdList ',' parmId                 { $$ = addSibling($1, $3); }
              | parmId { $$ = $1; }
+             | error                                 { $$ = NULL; yyerrok; }
              ;
 
 parmId     : ID                                          { $$ = newDeclNode(ParamK, UndefinedType, $1); }
@@ -240,17 +245,18 @@ assignop  : '=' {$$ = $1; }
           ;
 
 simpleExp  : simpleExp OR andExp                 {  $$ = newExpNode(OpK, $2, $1, $3);}
-           | simpleExp OR error                  { $$ = NULL; yyerrok; }
            | andExp                              {$$ = $1; }
+           | simpleExp OR error                  { $$ = NULL; yyerrok; }
            ;
 
 andExp     : andExp AND unaryRelExp              { $$ = newExpNode(OpK, $2, $1, $3); }
-           | andExp AND error                  { $$ = NULL; yyerrok; }
            | unaryRelExp {$$ = $1; }
+           | andExp AND error                  { $$ = NULL; yyerrok; }
            ;
 
 unaryRelExp : NOT unaryRelExp                      { $$ = newExpNode(OpK, $1, $2); }
             | relExp {$$ = $1; }
+            | NOT error { $$ = NULL; }
             ;
 
 relExp     : minmaxExp relop minmaxExp          { $$ = newExpNode(OpK, $2, $1, $3); }
@@ -274,8 +280,8 @@ minmaxop   : MAX {$$ = $1; }
            ;
 
 sumExp     : sumExp sumop mulExp              { $$ = newExpNode(OpK, $2, $1, $3); }
-           | sumExp sumop error               { $$ = NULL; yyerrok; }
            | mulExp {$$ = $1; }
+           | sumExp sumop error               { $$ = NULL; yyerrok; }
            ;
 
 sumop      : '+' {$$ = $1; }
@@ -283,8 +289,8 @@ sumop      : '+' {$$ = $1; }
            ;
 
 mulExp     : mulExp mulop unaryExp           { $$ = newExpNode(OpK, $2, $1, $3); }
-           | mulExp mulop error               { $$ = NULL; yyerrok; }
            | unaryExp {$$ = $1; }
+           | mulExp mulop error               { $$ = NULL; yyerrok; }
            ;
 
 mulop      : '*' {$$ = $1;}
@@ -293,8 +299,8 @@ mulop      : '*' {$$ = $1;}
            ;
 
 unaryExp   : unaryop unaryExp                   { $$ = newExpNode(OpK, $1, $2); }
-           | unaryop error                      { $$ = NULL; yyerrok; }
            | factor {$$ = $1; }
+           | unaryop error                      { $$ = NULL; yyerrok; }
            ;
 
 unaryop    : '-'                                     { $$ = $1; $$->tokenclass = CHSIGN; $$->tokenstr = (char*)"chsign";  }
@@ -318,10 +324,10 @@ immutable  : '(' exp ')'                            { $$ = $2; }
            | call                                   { $$ = $1; }
            | constant                               { $$ = $1; }
            | '(' error                              { $$ = NULL; yyerrok; }
+           | error '('                              { $$ = NULL; yyerrok; }
            ;
 
 call       : ID '(' args ')'                        { $$ = newExpNode(CallK, $1, $3); }
-           | error '('                              { $$ = NULL; yyerrok; }
            ;
 
 args       : argList {$$ = $1; }
