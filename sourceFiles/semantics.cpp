@@ -909,7 +909,7 @@ TreeNode *semanticAnalysis(TreeNode *syntree, SymbolTable *symtabX, int &globalO
 
    TreeNode *lookupNode = (TreeNode *)symtabX->lookup("main");
 
-   if (lookupNode == NULL || lookupNode->kind.decl != FuncK) {
+   if (lookupNode == NULL || lookupNode->kind.decl != FuncK || lookupNode->child[0] != NULL) {
       printf("LINKER ERROR: A function named 'main' with no parameters must be defined.\n");
       numErrors++;
    } 
