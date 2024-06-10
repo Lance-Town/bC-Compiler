@@ -251,7 +251,7 @@ char *expToStr(ExpType type, bool isStatic, bool isArray) {
          break;
    }
 
-   sprintf(expTypeToStrBuffer, "%s%s%s", 
+   snprintf(expTypeToStrBuffer, 80, "%s%s%s", 
          (isStatic ? "static " : ""),
          (isArray ? "array of " : ""), typeName);
 
