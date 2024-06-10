@@ -52,7 +52,7 @@ void commentLineNum(TreeNode *current) {
    char buff[16];
 
    if (linenumFlag) {
-      sprintf(buff, "%d", current->lineno);
+      snprintf(buff, 16, "%d", current->lineno);
       emitComment((char *)"Line: ", buff);
    }
    return;
@@ -112,7 +112,7 @@ void emitParams(TreeNode *current) {
    TreeNode *tmp = current;
 
    while (tmp != NULL) {
-      sprintf(paramsStr, "%d", params);
+      snprintf(paramsStr, 10, "%d", params);
       emitComment((char *)"Param", paramsStr);
       codegenExpression(tmp);
       emitRM((char *)"ST", AC, toffset, FP, (char *)"Push parameter");

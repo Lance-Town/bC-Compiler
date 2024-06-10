@@ -752,7 +752,7 @@ void treeDeclTraverse(TreeNode *current, SymbolTable *symtab) {
                {
                   char *newName;
                   newName = new char[strlen(current->attr.name)+10];
-                  sprintf(newName, "%s-%d", current->attr.name, ++varCounter);
+                  snprintf(newName, strlen(current->attr.name)+10, "%s-%d", current->attr.name, ++varCounter);
                   symtab->insertGlobal(newName, current);
                   delete [] newName;
                }
