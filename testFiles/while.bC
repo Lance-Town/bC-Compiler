@@ -1,0 +1,9 @@
+main() {
+   while(true) do {
+      break;
+   }
+
+   while (not true) do {
+      
+   }
+}

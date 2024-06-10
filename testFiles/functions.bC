@@ -1,0 +1,22 @@
+foo(int arr[]) {
+   arr[0]++;
+}
+
+boo (char str[]) {
+   str[0] = 'a';
+}
+
+lotsOfSpace           (char str[]) {
+   str = "Hello";
+}
+
+main() {
+   int arr[5];
+   char str[10];
+
+   foo(arr);
+   
+   boo(str);
+
+   lotsOfSpace(str);
+}
