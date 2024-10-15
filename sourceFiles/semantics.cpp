@@ -499,10 +499,8 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
                // FIX for array not being in symbol table, but the child existing. 
                current->type = current->child[0]->type;
                current->child[0]->isAssigned = true;
-//               current->child[0]->isUsed = true;
             } else {
                lookupNode->isAssigned = true;
- //              lookupNode->isUsed = true;
                current->type = lookupNode->type;
             }
 
@@ -531,7 +529,6 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
             }
 
             current->type = lookupNode->type;
-            //current->size = lookupNode->size;
             current->offset = lookupNode->offset;
             current->isUsed = true;
             lookupNode->isUsed = true;
@@ -624,37 +621,6 @@ void treeExpTraverse(TreeNode *current, SymbolTable *symtab) {
                numWarnings++;
             }
          }
-
-         /*
-         if (lookupNode != NULL) {
-            if (lookupNode->kind.decl == FuncK) {
-               printf("SEMANTIC ERROR(%d): Cannot use function '%s' as a variable.\n", current->lineno, lookupNode->attr.name);
-               numErrors++;
-            }
-
-            current->offset = lookupNode->offset;
-            current->type = lookupNode->type;
-            current->size = lookupNode->size;
-            current->varKind = lookupNode->varKind;
-            current->isArray = lookupNode->isArray;
-            current->isStatic = lookupNode->isStatic;
-            current->isUsed = true;
-            lookupNode->isUsed = true;
-
-            if (!lookupNode->isAssigned && !lookupNode->isArray && lookupNode->kind.decl == VarK) {
-               printf("SEMANTIC WARNING(%d): Variable '%s' may be uninitialized when used here.\n", current->lineno, lookupNode->attr.name);
-               lookupNode->isAssigned = true;
-               numWarnings++;
-            }
-         } else {
-            printf("SEMANTIC ERROR(%d): Symbol '%s' is not declared.\n", current->lineno, current->attr.name);
-            current->type = UndefinedType;
-            numErrors++;
-           
-         }
-         */
-
-
          break;
 
       case OpK:
@@ -708,7 +674,6 @@ void treeDeclTraverse(TreeNode *current, SymbolTable *symtab) {
       case VarK:
          treeTraverse(current->child[0], symtab);      
          if (current->child[0] != NULL) {
-//            printf("current: %s\tcurrent->child: %s\n", current->attr.name, current->child[0]->attr.name);
             if (current->type != current->child[0]->type) {
                printf("SEMANTIC ERROR(%d): Initializer for variable '%s' of %s is of %s\n", 
                      current->lineno, current->attr.name, expToStr(current->type, false, false), 
@@ -736,7 +701,6 @@ void treeDeclTraverse(TreeNode *current, SymbolTable *symtab) {
       case ParamK:
          if (current->child[0] != NULL) {
            current->isAssigned = true; 
-           //current->isUsed = true;
          }
 
          if (insertError(current, symtab)) {
